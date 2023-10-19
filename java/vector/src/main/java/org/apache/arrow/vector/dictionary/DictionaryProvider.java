@@ -27,7 +27,7 @@ import java.util.Set;
 public interface DictionaryProvider {
 
   /** Return the dictionary for the given ID. */
-  Dictionary lookup(long id);
+  BaseDictionary lookup(long id);
 
   /** Get all dictionary IDs. */
   Set<Long> getDictionaryIds();
@@ -37,19 +37,19 @@ public interface DictionaryProvider {
    */
   class MapDictionaryProvider implements DictionaryProvider {
 
-    private final Map<Long, Dictionary> map;
+    private final Map<Long, BaseDictionary> map;
 
     /**
      * Constructs a new instance from the given dictionaries.
      */
-    public MapDictionaryProvider(Dictionary... dictionaries) {
+    public MapDictionaryProvider(BaseDictionary... dictionaries) {
       this.map = new HashMap<>();
-      for (Dictionary dictionary : dictionaries) {
+      for (BaseDictionary dictionary : dictionaries) {
         put(dictionary);
       }
     }
 
-    public void put(Dictionary dictionary) {
+    public void put(BaseDictionary dictionary) {
       map.put(dictionary.getEncoding().getId(), dictionary);
     }
 
@@ -59,7 +59,7 @@ public interface DictionaryProvider {
     }
 
     @Override
-    public Dictionary lookup(long id) {
+    public BaseDictionary lookup(long id) {
       return map.get(id);
     }
   }

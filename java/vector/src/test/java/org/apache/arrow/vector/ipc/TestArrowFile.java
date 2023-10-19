@@ -45,9 +45,11 @@ import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.StructVector;
+import org.apache.arrow.vector.dictionary.DeltaDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryEncoder;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
+import org.apache.arrow.vector.ipc.message.ArrowBlock;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -141,6 +143,70 @@ public class TestArrowFile extends BaseFileTest {
         assertTrue(reader.loadNextBatch());
         // here will throw exception if read footer instead of eos.
         assertFalse(reader.loadNextBatch());
+      }
+    }
+  }
+
+  @Test
+  public void newdict() throws Exception {
+    File file = new File("target/mytest_multi_newdict.arrow");
+    DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
+    DictionaryEncoding de = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
+    DeltaDictionary dict = new DeltaDictionary(
+        "vectorA",
+        de,
+        new ArrowType.Utf8(),
+        new ArrowType.Int(16, false),
+        allocator
+    );
+    provider.put(dict);
+
+    dict.add("foo".getBytes(StandardCharsets.UTF_8));
+    dict.add("bar".getBytes(StandardCharsets.UTF_8));
+
+    VectorSchemaRoot root = VectorSchemaRoot.of(dict.getIndexVector());
+    root.setRowCount(2);
+    try (FileOutputStream fileOutputStream = new FileOutputStream(file);
+         ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
+
+      // batch 1
+      arrowWriter.start();
+      arrowWriter.writeBatch();
+      dict.reset();
+
+      // batch 2
+      dict.add("meep".getBytes(StandardCharsets.UTF_8));
+      dict.add("bar".getBytes(StandardCharsets.UTF_8));
+
+      root.setRowCount(2);
+      arrowWriter.writeBatch();
+      dict.reset();
+
+      dict.add("bazz".getBytes(StandardCharsets.UTF_8));
+      root.setRowCount(1);
+      arrowWriter.writeBatch();dict.reset();
+
+      dict.add("bar".getBytes(StandardCharsets.UTF_8));
+      dict.add("foo".getBytes(StandardCharsets.UTF_8));
+      root.setRowCount(2);
+      arrowWriter.writeBatch();
+
+      arrowWriter.end();
+    }
+    dict.close();
+
+    System.out.println("-------------READ ");
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      for (ArrowBlock arrowBlock : reader.getRecordBlocks()) {
+        reader.loadRecordBatch(arrowBlock);
+        VectorSchemaRoot r = reader.getVectorSchemaRoot();
+        FieldVector dv = r.getVector("vectorA");
+        DictionaryEncoding dictionaryEncoding = dv.getField().getDictionary();
+        Dictionary d = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
+        try (ValueVector readVector = DictionaryEncoder.decode(dv, d)) {
+          System.out.println("Decoded data: " + readVector);
+        }
       }
     }
   }

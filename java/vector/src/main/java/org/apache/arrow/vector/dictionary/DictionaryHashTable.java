@@ -96,9 +96,11 @@ public class DictionaryHashTable {
 
     this.hasher = hasher;
 
-    // build hash table
-    for (int i = 0; i < this.dictionary.getValueCount(); i++) {
-      put(i);
+    if (dictionary != null) {
+      // build hash table
+      for (int i = 0; i < this.dictionary.getValueCount(); i++) {
+        put(i);
+      }
     }
   }
 
@@ -108,6 +110,14 @@ public class DictionaryHashTable {
 
   public DictionaryHashTable(ValueVector dictionary) {
     this(dictionary, SimpleHasher.INSTANCE);
+  }
+
+  public DictionaryHashTable() {
+    this(DEFAULT_INITIAL_CAPACITY, null, SimpleHasher.INSTANCE);
+
+    if (table == EMPTY_TABLE) {
+      inflateTable(threshold);
+    }
   }
 
   /**
@@ -185,6 +195,16 @@ public class DictionaryHashTable {
     addEntry(hash, indexInDictionary, i);
   }
 
+  public int getIndex(int hash) {
+    int i = indexFor(hash, table.length);
+    for (DictionaryHashTable.Entry e = table[i]; e != null; e = e.next) {
+      if (e.hash == hash) {
+        return e.index;
+      }
+    }
+    return -1;
+  }
+
   /**
    * Create a new Entry at the specific position of table.
    */
@@ -194,10 +214,15 @@ public class DictionaryHashTable {
     size++;
   }
 
+  public void addEntry(int hash, int index) {
+    int bucketIndex = indexFor(hash, table.length);
+    addEntry(hash, index, bucketIndex);
+  }
+
   /**
    * Add Entry at the specified location of the table.
    */
-  void addEntry(int hash, int index, int bucketIndex) {
+  public void addEntry(int hash, int index, int bucketIndex) {
     if ((size >= threshold) && (null != table[bucketIndex])) {
       resize(2 * table.length);
       bucketIndex = indexFor(hash, table.length);

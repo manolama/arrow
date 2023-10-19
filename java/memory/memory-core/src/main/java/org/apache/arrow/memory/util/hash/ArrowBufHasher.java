@@ -44,4 +44,5 @@ public interface ArrowBufHasher {
    * @return the hash code.
    */
   int hashCode(ArrowBuf buf, long offset, long length);
+
 }

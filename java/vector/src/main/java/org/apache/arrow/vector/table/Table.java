@@ -28,6 +28,7 @@ import java.util.stream.StreamSupport;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
@@ -113,7 +114,7 @@ public class Table extends BaseTable implements Iterable<Row> {
       Dictionary[] dictionaryCopies = new Dictionary[ids.size()];
       int i = 0;
       for (Long id : ids) {
-        Dictionary src = dictionaryProvider.lookup(id);
+        BaseDictionary src = dictionaryProvider.lookup(id);
         FieldVector srcVector = src.getVector();
         FieldVector destVector = srcVector.getField().createVector(srcVector.getAllocator());
         destVector.copyFromSafe(0, srcVector.getValueCount(), srcVector); // TODO: Remove safe copy for perf

@@ -32,6 +32,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.compare.VectorEqualsVisitor;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.CompressionUtil;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.ipc.message.IpcOption;
@@ -135,7 +136,7 @@ public class ArrowStreamWriter extends ArrowWriter {
       throws IOException {
     // write out any dictionaries that have changes
     for (long id : dictionaryIdsUsed) {
-      Dictionary dictionary = provider.lookup(id);
+      BaseDictionary dictionary = provider.lookup(id);
       FieldVector vector = dictionary.getVector();
       if (previousDictionaries.containsKey(id) &&
           VectorEqualsVisitor.vectorEquals(vector, previousDictionaries.get(id))) {

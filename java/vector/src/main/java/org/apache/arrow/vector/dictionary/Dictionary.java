@@ -28,7 +28,7 @@ import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
  * A dictionary (integer to Value mapping) that is used to facilitate
  * dictionary encoding compression.
  */
-public class Dictionary {
+public class Dictionary implements BaseDictionary {
 
   private final DictionaryEncoding encoding;
   private final FieldVector dictionary;

@@ -20,6 +20,8 @@ package org.apache.arrow.memory.util.hash;
 import org.apache.arrow.memory.ArrowBuf;
 import org.apache.arrow.memory.util.MemoryUtil;
 
+import java.util.Arrays;
+
 /**
  * Implementation of the Murmur hashing algorithm.
  * Details of the algorithm can be found in
@@ -106,6 +108,32 @@ public class MurmurHasher implements ArrowBufHasher {
     return finalizeHashCode(hash, length);
   }
 
+  public static int hashCode(byte[] buffer, int offset, int length, int seed) {
+    // TODO
+    if (true) {
+      return Arrays.hashCode(buffer);
+    }
+    int index = offset;
+    int hash = seed;
+    while (index + 4 <= length) {
+      int intValue = readInt(buffer, index, 4);
+      hash = combineHashCode(hash, intValue);
+      index += 4;
+    }
+
+    if (index < length) {
+      // process remaining data as a integer in little endian
+      int intValue = 0;
+      for (int i = index - 1; i >= index; i--) {
+        intValue <<= 8;
+        intValue |= (readInt(buffer, index, length - index) & 0x000000ff);
+        index += 1;
+      }
+      hash = combineHashCode(hash, intValue);
+    }
+    return finalizeHashCode(hash, length);
+  }
+
   /**
    * Combine the current hash code and a new int value to calculate
    * a new hash code.
@@ -171,5 +199,14 @@ public class MurmurHasher implements ArrowBufHasher {
   @Override
   public int hashCode() {
     return seed;
+  }
+
+  static private int readInt(byte[] buffer, int offset, int len) {
+    int result = 0;
+    for (int i = offset; i < offset + len; i++) {
+      result <<= 8;
+      result |= (buffer[i] & 0x000000ff);
+    }
+    return result;
   }
 }

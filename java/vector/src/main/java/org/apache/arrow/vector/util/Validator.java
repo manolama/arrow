@@ -23,6 +23,7 @@ import java.util.Objects;
 
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -69,8 +70,8 @@ public class Validator {
       }
 
       long id = encodings1.get(i).getId();
-      Dictionary dict1 = provider1.lookup(id);
-      Dictionary dict2 = provider2.lookup(id);
+      BaseDictionary dict1 = provider1.lookup(id);
+      BaseDictionary dict2 = provider2.lookup(id);
 
       if (dict1 == null || dict2 == null) {
         throw new IllegalArgumentException("The DictionaryProvider did not contain the required " +

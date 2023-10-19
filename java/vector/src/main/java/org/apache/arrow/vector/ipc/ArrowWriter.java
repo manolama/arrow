@@ -32,6 +32,8 @@ import org.apache.arrow.vector.VectorUnloader;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.CompressionUtil;
 import org.apache.arrow.vector.compression.NoCompressionCodec;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
+import org.apache.arrow.vector.dictionary.DeltaDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
@@ -125,7 +127,10 @@ public abstract class ArrowWriter implements AutoCloseable {
     }
   }
 
-  protected void writeDictionaryBatch(Dictionary dictionary, boolean initial) throws IOException {
+  protected void writeDictionaryBatch(BaseDictionary dictionary, boolean initial) throws IOException {
+    if (dictionary instanceof DeltaDictionary) {
+      ((DeltaDictionary) dictionary).mark();
+    }
     FieldVector vector = dictionary.getVector();
     long id = dictionary.getEncoding().getId();
     int count = vector.getValueCount();

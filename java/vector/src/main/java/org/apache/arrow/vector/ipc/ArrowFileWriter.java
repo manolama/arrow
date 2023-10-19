@@ -29,6 +29,7 @@ import org.apache.arrow.util.VisibleForTesting;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.CompressionUtil;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
@@ -131,21 +132,22 @@ public class ArrowFileWriter extends ArrowWriter {
       throws IOException {
     if (dictionariesWritten) {
       for (long id : dictionaryIdsUsed) {
-        Dictionary dictionary = provider.lookup(id);
+        BaseDictionary dictionary = provider.lookup(id);
         if (dictionary.getEncoding().isDelta()) {
-          System.out.println("**** Writing delta for " + id + " => " + dictionary.getVector());
           writeDictionaryBatch(dictionary, false);
+          System.out.println("**** Wrote delta for " + id + " => " + dictionary.getVector());
         } else {
           //throw new IllegalStateException("Replacement dictionaries not allowed in IPC File format. Dictionary ID: " + dictionary.getEncoding().getId());
         }
       }
       return;
     }
+
     dictionariesWritten = true;
     // Write out all dictionaries required.
     // Replacement dictionaries are not supported in the IPC file format.
     for (long id : dictionaryIdsUsed) {
-      Dictionary dictionary = provider.lookup(id);
+      BaseDictionary dictionary = provider.lookup(id);
       writeDictionaryBatch(dictionary, true);
       System.out.println("**** Wrote dict " + id + " => " + dictionary.getVector());
     }

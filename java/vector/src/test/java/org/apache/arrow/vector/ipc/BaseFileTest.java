@@ -74,6 +74,7 @@ import org.apache.arrow.vector.complex.writer.UInt1Writer;
 import org.apache.arrow.vector.complex.writer.UInt2Writer;
 import org.apache.arrow.vector.complex.writer.UInt4Writer;
 import org.apache.arrow.vector.complex.writer.UInt8Writer;
+import org.apache.arrow.vector.dictionary.BaseDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryEncoder;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -400,7 +401,7 @@ public class BaseFileTest {
     Assert.assertEquals(2, vector2.getObject(4));
     Assert.assertEquals(null, vector2.getObject(5));
 
-    Dictionary dictionary1 = provider.lookup(1L);
+    BaseDictionary dictionary1 = provider.lookup(1L);
     Assert.assertNotNull(dictionary1);
     VarCharVector dictionaryVector = ((VarCharVector) dictionary1.getVector());
     Assert.assertEquals(3, dictionaryVector.getValueCount());
@@ -408,7 +409,7 @@ public class BaseFileTest {
     Assert.assertEquals(new Text("bar"), dictionaryVector.getObject(1));
     Assert.assertEquals(new Text("baz"), dictionaryVector.getObject(2));
 
-    Dictionary dictionary2 = provider.lookup(2L);
+    BaseDictionary dictionary2 = provider.lookup(2L);
     Assert.assertNotNull(dictionary2);
     dictionaryVector = ((VarCharVector) dictionary2.getVector());
     Assert.assertEquals(3, dictionaryVector.getValueCount());
@@ -470,7 +471,7 @@ public class BaseFileTest {
     Assert.assertEquals(Arrays.asList(0), vector.getObject(1));
     Assert.assertEquals(Arrays.asList(1), vector.getObject(2));
 
-    Dictionary dictionary = provider.lookup(2L);
+    BaseDictionary dictionary = provider.lookup(2L);
     Assert.assertNotNull(dictionary);
     VarCharVector dictionaryVector = ((VarCharVector) dictionary.getVector());
     Assert.assertEquals(2, dictionaryVector.getValueCount());
