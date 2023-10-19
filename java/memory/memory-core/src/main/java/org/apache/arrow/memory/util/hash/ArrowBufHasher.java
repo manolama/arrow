@@ -45,4 +45,5 @@ public interface ArrowBufHasher {
    */
   int hashCode(ArrowBuf buf, long offset, long length);
 
+  int hashCode(byte[] buf, int offset, int length);
 }

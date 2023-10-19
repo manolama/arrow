@@ -37,8 +37,6 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   private final DictionaryEncoding encoding;
 
-  private final BufferAllocator allocator;
-
   private final BaseVariableWidthVector dictionary;
 
   private final BaseIntVector indexVector;
@@ -47,7 +45,6 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   private int deltaIndex;
   private int dictionaryIndex;
-  //private int indexIndex;
 
   public DeltaDictionary(
       String name,
@@ -57,7 +54,6 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
       BufferAllocator allocator
   ) {
     this.encoding = encoding;
-    this.allocator = allocator;
     dictionary = (BaseVariableWidthVector) new FieldType(false, dictionaryType, null).createNewSingleVector(name + "-dictionary", allocator, null);
     indexVector = (BaseIntVector) new FieldType(true, indexType, encoding).createNewSingleVector(name, allocator, null);
     hashTable = new DictionaryHashTable();
@@ -68,7 +64,6 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
       FieldVector indexVector
   ) {
     this.encoding = dictionary.getField().getDictionary();
-    this.allocator = null;
     this.dictionary = (BaseVariableWidthVector) dictionary;
     this.indexVector = (BaseIntVector) indexVector;
     hashTable = new DictionaryHashTable();
@@ -96,14 +91,12 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   public void set(int index, byte[] value, int offset, int len) {
     int di = getIndex(value, offset, len);
-    System.out.println("   Wrote " + new String(value, offset, len) + " with dict [" + di + "] to " + index);
     indexVector.setWithPossibleTruncate(index, di);
   }
 
   private int getIndex(byte[] value, int offset, int len) {
     int hash = MurmurHasher.hashCode(value, offset, len, 0);
     int i = hashTable.getIndex(hash);
-    System.out.println("   Got idx " + i + " for " + new String(value));
     if (i >= 0) {
       return i;
     } else {
@@ -121,14 +114,11 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   public void reset() {
     dictionaryIndex = 0;
-    //indexIndex = 0;
     dictionary.reset();
     indexVector.reset();
   }
 
   public void mark() {
     dictionary.setValueCount(dictionaryIndex);
-    //indexVector.setValueCount(indexIndex);
-    System.out.println("   [[[ Marked Dict: " + dictionaryIndex + "  -> " + dictionary + "  => " + indexVector);
   }
 }

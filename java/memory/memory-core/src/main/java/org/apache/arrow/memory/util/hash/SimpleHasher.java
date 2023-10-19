@@ -21,6 +21,8 @@ package org.apache.arrow.memory.util.hash;
 import org.apache.arrow.memory.ArrowBuf;
 import org.apache.arrow.memory.util.MemoryUtil;
 
+import java.nio.ByteBuffer;
+
 /**
  * A simple hasher that calculates the hash code of integers as is,
  * and does not perform any finalization. So the computation is extremely
@@ -90,6 +92,34 @@ public class SimpleHasher implements ArrowBufHasher {
   public int hashCode(ArrowBuf buf, long offset, long length) {
     buf.checkBytes(offset, offset + length);
     return hashCode(buf.memoryAddress() + offset, length);
+  }
+
+  @Override
+  public int hashCode(byte[] buf, int offset, int length) {
+    int hashValue = 0;
+    int index = 0;
+    while (index + 8 <= length) {
+      long longValue = ByteBuffer.wrap(buf, offset + index, 8).getLong();
+      int longHash = getLongHashCode(longValue);
+      hashValue = combineHashCode(hashValue, longHash);
+      index += 8;
+    }
+
+    if (index + 4 <= length) {
+      int intValue = ByteBuffer.wrap(buf, offset + index, 4).getInt();
+      int intHash = intValue;
+      hashValue = combineHashCode(hashValue, intHash);
+      index += 4;
+    }
+
+    while (index < length) {
+      byte byteValue = buf[index];
+      int byteHash = byteValue;
+      hashValue = combineHashCode(hashValue, byteHash);
+      index += 1;
+    }
+
+    return finalizeHashCode(hashValue);
   }
 
   protected int combineHashCode(int currentHashCode, int newHashCode) {

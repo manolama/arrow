@@ -66,6 +66,11 @@ public class MurmurHasher implements ArrowBufHasher {
     return hashCode(buf.memoryAddress() + offset, length);
   }
 
+  @Override
+  public int hashCode(byte[] buf, int offset, int length) {
+    return hashCode(buf, offset, length, seed);
+  }
+
   /**
    * Calculates the hash code for a memory region.
    * @param buf the buffer for the memory region.
@@ -98,7 +103,7 @@ public class MurmurHasher implements ArrowBufHasher {
     if (index < length) {
       // process remaining data as a integer in little endian
       int intValue = 0;
-      for (int i = index - 1; i >= index; i--) {
+      for (long i = length - 1; i >= index; i--) {
         intValue <<= 8;
         intValue |= (MemoryUtil.UNSAFE.getByte(address + i) & 0x000000ff);
         index += 1;
@@ -109,10 +114,7 @@ public class MurmurHasher implements ArrowBufHasher {
   }
 
   public static int hashCode(byte[] buffer, int offset, int length, int seed) {
-    // TODO
-    if (true) {
-      return Arrays.hashCode(buffer);
-    }
+    //if (true) return Arrays.hashCode(buffer);
     int index = offset;
     int hash = seed;
     while (index + 4 <= length) {
@@ -124,9 +126,9 @@ public class MurmurHasher implements ArrowBufHasher {
     if (index < length) {
       // process remaining data as a integer in little endian
       int intValue = 0;
-      for (int i = index - 1; i >= index; i--) {
+      for (int i = length - 1; i >= index; i--) {
         intValue <<= 8;
-        intValue |= (readInt(buffer, index, length - index) & 0x000000ff);
+        intValue |= (buffer[i] & 0x000000ff);
         index += 1;
       }
       hash = combineHashCode(hash, intValue);
