@@ -130,6 +130,15 @@ public class ArrowFileWriter extends ArrowWriter {
   protected void ensureDictionariesWritten(DictionaryProvider provider, Set<Long> dictionaryIdsUsed)
       throws IOException {
     if (dictionariesWritten) {
+      for (long id : dictionaryIdsUsed) {
+        Dictionary dictionary = provider.lookup(id);
+        if (dictionary.getEncoding().isDelta()) {
+          System.out.println("**** Writing delta for " + id + " => " + dictionary.getVector());
+          writeDictionaryBatch(dictionary, false);
+        } else {
+          //throw new IllegalStateException("Replacement dictionaries not allowed in IPC File format. Dictionary ID: " + dictionary.getEncoding().getId());
+        }
+      }
       return;
     }
     dictionariesWritten = true;
@@ -137,7 +146,8 @@ public class ArrowFileWriter extends ArrowWriter {
     // Replacement dictionaries are not supported in the IPC file format.
     for (long id : dictionaryIdsUsed) {
       Dictionary dictionary = provider.lookup(id);
-      writeDictionaryBatch(dictionary);
+      writeDictionaryBatch(dictionary, true);
+      System.out.println("**** Wrote dict " + id + " => " + dictionary.getVector());
     }
   }
 

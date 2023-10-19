@@ -142,7 +142,8 @@ public class ArrowStreamWriter extends ArrowWriter {
         // Dictionary was previously written and hasn't changed
         continue;
       }
-      writeDictionaryBatch(dictionary);
+      boolean isDelta = previousDictionaries.containsKey(id) ? dictionary.getEncoding().isDelta() : false;
+      writeDictionaryBatch(dictionary, isDelta);
       // Store a copy of the vector in case it is later mutated
       if (previousDictionaries.containsKey(id)) {
         previousDictionaries.get(id).close();

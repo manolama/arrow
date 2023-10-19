@@ -125,7 +125,7 @@ public abstract class ArrowWriter implements AutoCloseable {
     }
   }
 
-  protected void writeDictionaryBatch(Dictionary dictionary) throws IOException {
+  protected void writeDictionaryBatch(Dictionary dictionary, boolean initial) throws IOException {
     FieldVector vector = dictionary.getVector();
     long id = dictionary.getEncoding().getId();
     int count = vector.getValueCount();
@@ -135,7 +135,8 @@ public abstract class ArrowWriter implements AutoCloseable {
         count);
     VectorUnloader unloader = new VectorUnloader(dictRoot);
     ArrowRecordBatch batch = unloader.getRecordBatch();
-    ArrowDictionaryBatch dictionaryBatch = new ArrowDictionaryBatch(id, batch, false);
+    boolean isDelta = initial ? false : dictionary.getEncoding().isDelta();
+    ArrowDictionaryBatch dictionaryBatch = new ArrowDictionaryBatch(id, batch, isDelta);
     try {
       writeDictionaryBatch(dictionaryBatch);
     } finally {

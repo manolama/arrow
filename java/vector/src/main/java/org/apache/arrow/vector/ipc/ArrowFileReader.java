@@ -30,6 +30,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.VisibleForTesting;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.NoCompressionCodec;
+import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
 import org.apache.arrow.vector.ipc.message.ArrowDictionaryBatch;
 import org.apache.arrow.vector.ipc.message.ArrowFooter;
@@ -123,11 +124,6 @@ public class ArrowFileReader extends ArrowReader {
     if (footer.getRecordBatches().size() == 0) {
       return;
     }
-    // Read and load all dictionaries from schema
-    for (int i = 0; i < dictionaries.size(); i++) {
-      ArrowDictionaryBatch dictionaryBatch = readDictionary();
-      loadDictionary(dictionaryBatch);
-    }
   }
 
   /**
@@ -164,6 +160,13 @@ public class ArrowFileReader extends ArrowReader {
       ArrowBlock block = footer.getRecordBatches().get(currentRecordBatch++);
       ArrowRecordBatch batch = readRecordBatch(in, block, allocator);
       loadRecordBatch(batch);
+
+      // Read and load all dictionaries from schema
+      for (int i = 0; i < dictionaries.size(); i++) {
+        ArrowDictionaryBatch dictionaryBatch = readDictionary();
+        loadDictionary(dictionaryBatch);
+      }
+
       return true;
     } else {
       return false;
@@ -194,6 +197,15 @@ public class ArrowFileReader extends ArrowReader {
       throw new IllegalArgumentException("Arrow block does not exist in record batches: " + block);
     }
     currentRecordBatch = blockIndex;
+    int end = blockIndex * dictionaries.size();
+    System.out.println("  START " + currentDictionaryBatch + "  to  " + end);
+    // scan for delta dictionaries
+    while (currentDictionaryBatch < end) {
+      for (int i = 0; i < dictionaries.size(); i++) {
+        ArrowDictionaryBatch dictionaryBatch = readDictionary();
+        loadDictionary(dictionaryBatch);
+      }
+    }
     return loadNextBatch();
   }
 
