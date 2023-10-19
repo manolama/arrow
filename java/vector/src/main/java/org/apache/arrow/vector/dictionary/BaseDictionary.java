@@ -4,12 +4,24 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 
+/**
+ * Interface for all dictionary types.
+ */
 public interface BaseDictionary {
 
-  public FieldVector getVector();
+  /**
+   * The dictionary vector containing unique entries.
+   */
+  FieldVector getVector();
 
-  public DictionaryEncoding getEncoding();
+  /**
+   * The encoding used for the dictionary vector.
+   */
+  DictionaryEncoding getEncoding();
 
-  public ArrowType getVectorType();
+  /**
+   * The type of the dictionary vector.
+   */
+  ArrowType getVectorType();
 
 }

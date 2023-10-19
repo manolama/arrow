@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.arrow.vector.dictionary;
 
 import org.apache.arrow.memory.BufferAllocator;
@@ -12,6 +29,10 @@ import org.apache.arrow.vector.types.pojo.FieldType;
 import java.io.Closeable;
 import java.io.IOException;
 
+/**
+ * A dictionary implementation used for delta encoding across batches. This dictionary
+ * is limited to a single column.
+ */
 public class DeltaDictionary implements Closeable, BaseDictionary {
 
   private final DictionaryEncoding encoding;
@@ -26,7 +47,7 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   private int deltaIndex;
   private int dictionaryIndex;
-  private int indexIndex;
+  //private int indexIndex;
 
   public DeltaDictionary(
       String name,
@@ -38,7 +59,18 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
     this.encoding = encoding;
     this.allocator = allocator;
     dictionary = (BaseVariableWidthVector) new FieldType(false, dictionaryType, null).createNewSingleVector(name + "-dictionary", allocator, null);
-    indexVector = (BaseIntVector) new FieldType(false, indexType, encoding).createNewSingleVector(name, allocator, null);
+    indexVector = (BaseIntVector) new FieldType(true, indexType, encoding).createNewSingleVector(name, allocator, null);
+    hashTable = new DictionaryHashTable();
+  }
+
+  public DeltaDictionary(
+      FieldVector dictionary,
+      FieldVector indexVector
+  ) {
+    this.encoding = dictionary.getField().getDictionary();
+    this.allocator = null;
+    this.dictionary = (BaseVariableWidthVector) dictionary;
+    this.indexVector = (BaseIntVector) indexVector;
     hashTable = new DictionaryHashTable();
   }
 
@@ -58,14 +90,14 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
     return encoding;
   }
 
-  public void add(byte[] value) {
-    add(value, 0, value.length);
+  public void set(int index, byte[] value) {
+    set(index, value, 0, value.length);
   }
 
-  public void add(byte[] value, int offset, int len) {
-    int index = getIndex(value, offset, len);
-    System.out.println("   Wrote " + new String(value, offset, len) + " with dict [" + index + "] to " + indexIndex);
-    indexVector.setWithPossibleTruncate(indexIndex++, index);
+  public void set(int index, byte[] value, int offset, int len) {
+    int di = getIndex(value, offset, len);
+    System.out.println("   Wrote " + new String(value, offset, len) + " with dict [" + di + "] to " + index);
+    indexVector.setWithPossibleTruncate(index, di);
   }
 
   private int getIndex(byte[] value, int offset, int len) {
@@ -89,14 +121,14 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
 
   public void reset() {
     dictionaryIndex = 0;
-    indexIndex = 0;
+    //indexIndex = 0;
     dictionary.reset();
     indexVector.reset();
   }
 
   public void mark() {
     dictionary.setValueCount(dictionaryIndex);
-    indexVector.setValueCount(indexIndex);
-    System.out.println("   [[[ Marked Dict: " + dictionaryIndex + "  i: " + indexIndex + " => " + dictionary + "  => " + indexVector);
+    //indexVector.setValueCount(indexIndex);
+    System.out.println("   [[[ Marked Dict: " + dictionaryIndex + "  -> " + dictionary + "  => " + indexVector);
   }
 }

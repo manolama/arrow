@@ -161,8 +161,8 @@ public class TestArrowFile extends BaseFileTest {
     );
     provider.put(dict);
 
-    dict.add("foo".getBytes(StandardCharsets.UTF_8));
-    dict.add("bar".getBytes(StandardCharsets.UTF_8));
+    dict.set(0, "foo".getBytes(StandardCharsets.UTF_8));
+    dict.set(1, "bar".getBytes(StandardCharsets.UTF_8));
 
     VectorSchemaRoot root = VectorSchemaRoot.of(dict.getIndexVector());
     root.setRowCount(2);
@@ -175,19 +175,19 @@ public class TestArrowFile extends BaseFileTest {
       dict.reset();
 
       // batch 2
-      dict.add("meep".getBytes(StandardCharsets.UTF_8));
-      dict.add("bar".getBytes(StandardCharsets.UTF_8));
+      dict.set(0, "meep".getBytes(StandardCharsets.UTF_8));
+      dict.set(1, "bar".getBytes(StandardCharsets.UTF_8));
 
       root.setRowCount(2);
       arrowWriter.writeBatch();
       dict.reset();
 
-      dict.add("bazz".getBytes(StandardCharsets.UTF_8));
+      dict.set(0, "bazz".getBytes(StandardCharsets.UTF_8));
       root.setRowCount(1);
       arrowWriter.writeBatch();dict.reset();
 
-      dict.add("bar".getBytes(StandardCharsets.UTF_8));
-      dict.add("foo".getBytes(StandardCharsets.UTF_8));
+      dict.set(0, "bar".getBytes(StandardCharsets.UTF_8));
+      dict.set(1, "foo".getBytes(StandardCharsets.UTF_8));
       root.setRowCount(2);
       arrowWriter.writeBatch();
 
