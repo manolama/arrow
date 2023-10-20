@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -51,6 +52,7 @@ public class ArrowFileReader extends ArrowReader {
 
   private SeekableReadChannel in;
   private ArrowFooter footer;
+  private int drb = 0; // TESTING dictionary block, i.e. if we're in sync with currentRecordbatch.
   private int currentDictionaryBatch = 0;
   private int currentRecordBatch = 0;
 
@@ -136,21 +138,6 @@ public class ArrowFileReader extends ArrowReader {
     return new HashMap<>();
   }
 
-  /**
-   * Read a dictionary batch from the source, will be invoked after the schema has been read and
-   * called N times, where N is the number of dictionaries indicated by the schema Fields.
-   *
-   * @return the read ArrowDictionaryBatch
-   * @throws IOException on error
-   */
-  public ArrowDictionaryBatch readDictionary() throws IOException {
-    if (currentDictionaryBatch >= footer.getDictionaries().size()) {
-      throw new IOException("Requested more dictionaries than defined in footer: " + currentDictionaryBatch);
-    }
-    ArrowBlock block = footer.getDictionaries().get(currentDictionaryBatch++);
-    return readDictionaryBatch(in, block, allocator);
-  }
-
   /** Returns true if a batch was read, false if no more batches. */
   @Override
   public boolean loadNextBatch() throws IOException {
@@ -162,10 +149,8 @@ public class ArrowFileReader extends ArrowReader {
       loadRecordBatch(batch);
 
       // Read and load all dictionaries from schema
-      for (int i = 0; i < dictionaries.size(); i++) {
-        ArrowDictionaryBatch dictionaryBatch = readDictionary();
-        loadDictionary(dictionaryBatch);
-      }
+      System.out.println("DICTS: " + dictionaries);
+      loadDictionaries();
 
       return true;
     } else {
@@ -173,6 +158,41 @@ public class ArrowFileReader extends ArrowReader {
     }
   }
 
+  private void loadDictionaries() throws IOException {
+    // initial load
+    if (currentDictionaryBatch == 0) {
+      for (int i = 0; i < dictionaries.size(); i++) {
+        ArrowBlock block = footer.getDictionaries().get(currentDictionaryBatch++);
+        ArrowDictionaryBatch dictionaryBatch = readDictionaryBatch(in, block, allocator);
+        loadDictionary(dictionaryBatch);
+      }
+      drb++;
+    } else {
+      // we need to look for delta dictionaries. It involves a look-ahead.
+      HashSet<Long> visited = new HashSet<Long>();
+      while (drb < currentRecordBatch && currentDictionaryBatch < footer.getDictionaries().size()) {
+        ArrowBlock block = footer.getDictionaries().get(currentDictionaryBatch++);
+        ArrowDictionaryBatch dictionaryBatch = readDictionaryBatch(in, block, allocator);
+        long dictionaryId = dictionaryBatch.getDictionaryId();
+        if (visited.contains(dictionaryId)) {
+          // done
+          currentDictionaryBatch--;
+          drb++;
+        } else if (!dictionaries.containsKey(dictionaryId)) {
+          throw new IOException("Dictionary ID " + dictionaryId + " was written " +
+              "after the initial batch. The file does not follow the IPC file protocol.");
+        } else if (!dictionaryBatch.isDelta()) {
+          throw new IOException("Dictionary ID " + dictionaryId + " was written as a replacement  " +
+              "after the initial batch. Replacement dictionaries are not currently allowed in the IPC file protocol.");
+        } else {
+          loadDictionary(dictionaryBatch);
+        }
+      }
+      if (currentDictionaryBatch >= footer.getDictionaries().size()) {
+        drb++;
+      }
+    }
+  }
 
   public List<ArrowBlock> getDictionaryBlocks() throws IOException {
     ensureInitialized();
@@ -200,12 +220,13 @@ public class ArrowFileReader extends ArrowReader {
     int end = blockIndex * dictionaries.size();
     System.out.println("  START " + currentDictionaryBatch + "  to  " + end);
     // scan for delta dictionaries
-    while (currentDictionaryBatch < end) {
-      for (int i = 0; i < dictionaries.size(); i++) {
-        ArrowDictionaryBatch dictionaryBatch = readDictionary();
-        loadDictionary(dictionaryBatch);
-      }
-    }
+    loadDictionaries();
+//    while (currentDictionaryBatch < end) {
+//      for (int i = 0; i < dictionaries.size(); i++) {
+//        ArrowDictionaryBatch dictionaryBatch = readDictionary();
+//        loadDictionary(dictionaryBatch);
+//      }
+//    }
     return loadNextBatch();
   }
 

@@ -19,7 +19,6 @@ package org.apache.arrow.vector.ipc;
 
 import static java.nio.channels.Channels.newChannel;
 import static org.apache.arrow.vector.TestUtils.newVarCharVector;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -34,26 +33,19 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.Collections2;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryEncoder;
-import org.apache.arrow.vector.dictionary.DictionaryProvider;
-import org.apache.arrow.vector.ipc.message.ArrowBlock;
-import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.FieldType;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
@@ -173,6 +165,41 @@ public class TestArrowFile extends BaseFileTest {
   }
 
   @Test
+  public void testMultiBatchDeltaDictionaryOutOfOrder() throws Exception {
+    File file = new File("target/mytest_multi_delta_dictionary_ooo.arrow");
+    writeDataMultiBatchWithDictionaries(file, 1);
+
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictionary = r.getVector("vectorA");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(2));
+      assertDictionary(dictionary, reader, null, "bazz");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(1));
+      assertDictionary(dictionary, reader, "meep", "bar");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(0));
+      assertDictionary(dictionary, reader, "foo", "bar");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(3));
+      assertDictionary(dictionary, reader, "bar", "zap");
+    }
+  }
+
+  @Test
+  public void testMultiBatchDeltaDictionarySeek() throws Exception {
+    File file = new File("target/mytest_multi_delta_dictionary_seek.arrow");
+    writeDataMultiBatchWithDictionaries(file, 1);
+
+    assertBlock(file, 0, new String[]{"foo", "bar"}, null);
+    assertBlock(file, 1, new String[]{"meep", "bar"}, null);
+    assertBlock(file, 2, new String[]{null, "bazz"}, null);
+    assertBlock(file, 3, new String[]{"bar", "zap"}, null);
+  }
+
+  @Test
   public void testMultiBatchReplacementDictionary() throws Exception {
     File file = new File("target/mytest_multi_delta_replacement.arrow");
     writeDataMultiBatchWithDictionaries(file, 2);
@@ -180,7 +207,6 @@ public class TestArrowFile extends BaseFileTest {
     try (FileInputStream fileInputStream = new FileInputStream(file);
          ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
       VectorSchemaRoot r = reader.getVectorSchemaRoot();
-      System.out.println(r);
       FieldVector dictionary = r.getVector("vectorB");
 
       reader.loadNextBatch();
@@ -198,37 +224,107 @@ public class TestArrowFile extends BaseFileTest {
   }
 
   @Test
-  public void testMultiBatchWithOneDictionary() throws Exception {
-    File file = new File("target/mytest_multi_delta_dictionary.arrow");
-    writeSingleDeltaDictionaryB(file);
+  public void testMultiBatchReplacementDictionaryOutOfOrder() throws Exception {
+    File file = new File("target/mytest_multi_delta_replacement_ooo.arrow");
+    writeDataMultiBatchWithDictionaries(file, 2);
 
     try (FileInputStream fileInputStream = new FileInputStream(file);
          ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
-      VectorSchemaRoot root = reader.getVectorSchemaRoot();
-      assertEquals(reader.getRecordBlocks().size(), 4);
-      assertTrue(reader.loadNextBatch());
-      assertVectorA(reader, root, 0);
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictionary = r.getVector("vectorB");
 
-      assertTrue(reader.loadNextBatch());
-      assertVectorA(reader, root, 1);
+      reader.loadRecordBatch(reader.getRecordBlocks().get(2));
+      assertDictionary(dictionary, reader, "ipsum", null);
 
-      assertTrue(reader.loadNextBatch());
-      assertVectorA(reader, root, 2);
+      reader.loadRecordBatch(reader.getRecordBlocks().get(1));
+      assertDictionary(dictionary, reader, "ipsum", "lorem");
 
-      assertTrue(reader.loadNextBatch());
-      assertVectorA(reader, root, 3);
+      reader.loadRecordBatch(reader.getRecordBlocks().get(3));
+      assertDictionary(dictionary, reader, null, "lorem");
 
-      assertFalse(reader.loadNextBatch());
+      reader.loadRecordBatch(reader.getRecordBlocks().get(0));
+      assertDictionary(dictionary, reader, "lorem", "ipsum");
     }
+  }
 
-    // load just the second block
+  @Test
+  public void testMultiBatchReplacementDictionarySeek() throws Exception {
+    File file = new File("target/mytest_multi_delta_replacement_seek.arrow");
+    writeDataMultiBatchWithDictionaries(file, 2);
+
+    assertBlock(file, 0, null, new String[]{"lorem", "ipsum"});
+    assertBlock(file, 1, null, new String[]{"ipsum", "lorem"});
+    assertBlock(file, 2, null, new String[]{"ipsum", null});
+    assertBlock(file, 3, null, new String[]{null, "lorem"});
+  }
+
+  @Test
+  public void testMultiBatchMixedDictionaries() throws Exception {
+    File file = new File("target/mytest_multi_mixed_dictionaries.arrow");
+    writeDataMultiBatchWithDictionaries(file, 3);
+
     try (FileInputStream fileInputStream = new FileInputStream(file);
          ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
-      VectorSchemaRoot root = reader.getVectorSchemaRoot();
-      assertEquals(4,reader.getRecordBlocks().size());
-      assertTrue(reader.loadRecordBatch(reader.getRecordBlocks().get(1)));
-      assertVectorA(reader, root, 1);
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictA = r.getVector("vectorA");
+      FieldVector dictB = r.getVector("vectorB");
+
+      reader.loadNextBatch();
+      assertDictionary(dictA, reader, "foo", "bar");
+      assertDictionary(dictB, reader, "lorem", "ipsum");
+
+      reader.loadNextBatch();
+      assertDictionary(dictA, reader, "meep", "bar");
+      assertDictionary(dictB, reader, "ipsum", "lorem");
+
+      reader.loadNextBatch();
+      assertDictionary(dictA, reader, null, "bazz");
+      assertDictionary(dictB, reader, "ipsum", null);
+
+      reader.loadNextBatch();
+      assertDictionary(dictA, reader, "bar", "zap");
+      assertDictionary(dictB, reader, null, "lorem");
     }
+  }
+
+  @Test
+  public void testMultiBatchMixedDictionariesOutOfOrder() throws Exception {
+    File file = new File("target/mytest_multi_mixed_dictionaries_ooo.arrow");
+    writeDataMultiBatchWithDictionaries(file, 3);
+
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictA = r.getVector("vectorA");
+      FieldVector dictB = r.getVector("vectorB");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(2));
+      assertDictionary(dictA, reader, null, "bazz");
+      assertDictionary(dictB, reader, "ipsum", null);
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(1));
+      assertDictionary(dictA, reader, "meep", "bar");
+      assertDictionary(dictB, reader, "ipsum", "lorem");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(3));
+      assertDictionary(dictA, reader, "bar", "zap");
+      assertDictionary(dictB, reader, null, "lorem");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(0));
+      assertDictionary(dictA, reader, "foo", "bar");
+      assertDictionary(dictB, reader, "lorem", "ipsum");
+    }
+  }
+
+  @Test
+  public void testMultiBatchMixedDictionariesSeek() throws Exception {
+    File file = new File("target/mytest_multi_mixed_seek.arrow");
+    writeDataMultiBatchWithDictionaries(file, 3);
+
+    assertBlock(file, 0, new String[]{"foo", "bar"}, new String[]{"lorem", "ipsum"});
+    assertBlock(file, 1, new String[]{"meep", "bar"}, new String[]{"ipsum", "lorem"});
+    assertBlock(file, 2, new String[]{null, "bazz"}, new String[]{"ipsum", null});
+    assertBlock(file, 3, new String[]{"bar", "zap"}, new String[]{null, "lorem"});
   }
 
   private void assertDictionary(FieldVector encoded, ArrowFileReader reader, String... expected) throws Exception {
@@ -247,200 +343,24 @@ public class TestArrowFile extends BaseFileTest {
     }
   }
 
-  private void assertVectorA(ArrowFileReader reader, VectorSchemaRoot root, int block) throws Exception {
-    System.out.println("Block: " + block);
-    FieldVector encoded = root.getVector("vectorA");
-    System.out.println(encoded);
-    DictionaryEncoding dictionaryEncoding = encoded.getField().getDictionary();
-    Dictionary dictionary = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
-    try (ValueVector decoded = DictionaryEncoder.decode(encoded, dictionary)) {
-      System.out.println(decoded);
-      if (block == 0) {
-        assertEquals("foo", decoded.getObject(0).toString());
-        assertEquals("bar", decoded.getObject(1).toString());
-      } else if (block == 1) {
-        assertEquals("meep", decoded.getObject(0).toString());
-        assertEquals("bar", decoded.getObject(1).toString());
-      } else if (block == 2) {
-        assertEquals("baz", decoded.getObject(0).toString());
-      } else if (block == 3) {
-        assertEquals("bar", decoded.getObject(0).toString());
-        assertEquals("foo", decoded.getObject(1).toString());
+  private void assertBlock(File file, int block, String[] delta, String[] replace) throws Exception {
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictA = r.getVector("vectorA");
+      FieldVector dictB = r.getVector("vectorB");
+
+      reader.loadRecordBatch(reader.getRecordBlocks().get(block));
+      if (delta != null) {
+        assertDictionary(dictA, reader, delta);
+      } else {
+        assertNull(dictA);
+      }
+      if (replace != null) {
+        assertDictionary(dictB, reader, replace);
+      } else{
+        assertNull(dictB);
       }
     }
-  }
-
-  private void assertVectorB(ArrowFileReader reader, VectorSchemaRoot root, int block) throws Exception {
-    FieldVector encoded = root.getVector("vectorB");
-    DictionaryEncoding dictionaryEncoding = encoded.getField().getDictionary();
-    Dictionary dictionary = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
-    try (ValueVector decoded = DictionaryEncoder.decode(encoded, dictionary)) {
-      if (block == 0) {
-        assertEquals("a", decoded.getObject(0).toString());
-        assertEquals("b", decoded.getObject(1).toString());
-      } else if (block == 1) {
-        assertEquals("b", decoded.getObject(0).toString());
-        assertEquals("a", decoded.getObject(1).toString());
-      } else if (block == 2) {
-        assertNull(decoded.getObject(0));
-        assertNull(decoded.getObject(1));
-      } else if (block == 3) {
-        assertNull(decoded.getObject(0));
-        assertEquals("a", decoded.getObject(1).toString());
-      }
-    }
-  }
-
-  private void writeSingleDeltaDictionary(File file) throws Exception {
-    Map<String, Integer> stringToIndex = new HashMap<>();
-
-    try (VarCharVector dictionaryVector = new VarCharVector("dictionary", allocator)) {
-      DictionaryEncoding dictionaryEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
-
-      Dictionary dictionary = new Dictionary(dictionaryVector, dictionaryEncoding);
-      DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
-      provider.put(dictionary);
-
-      try (UInt2Vector vector = new UInt2Vector(
-          "vectorA",
-          new FieldType(false, new ArrowType.Int(16, false), dictionaryEncoding),
-          allocator)) {
-        vector.allocateNew();
-        dictionaryVector.allocateNew(2);
-
-        dictionaryVector.set(0, "foo".getBytes(StandardCharsets.UTF_8));
-        stringToIndex.put("foo", 0);
-        dictionaryVector.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-        stringToIndex.put("bar", 1);
-
-        vector.set(0, stringToIndex.get("foo"));
-        vector.set(1, stringToIndex.get("bar"));
-
-        VectorSchemaRoot root = VectorSchemaRoot.of(dictionaryVector, vector);
-        root.setRowCount(2);
-        try (FileOutputStream fileOutputStream = new FileOutputStream(file);
-             ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
-
-          // batch 1
-          arrowWriter.start();
-          arrowWriter.writeBatch();
-          dictionaryVector.reset();
-          vector.reset();
-
-          // batch 2
-          dictionaryVector.set(0, "meep".getBytes(StandardCharsets.UTF_8));
-          stringToIndex.put("meep", 2);
-
-          vector.set(0, stringToIndex.get("meep"));
-          vector.set(1, stringToIndex.get("bar"));
-
-          root.setRowCount(2);
-
-          arrowWriter.writeBatch();
-          arrowWriter.end();
-        }
-      }
-    }
-  }
-
-  private void writeSingleDeltaDictionaryB(File file) throws Exception {
-    DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
-    ManualDictionaryVectorA vectorA = new ManualDictionaryVectorA(allocator, provider);
-
-    vectorA.next();
-    VectorSchemaRoot root = VectorSchemaRoot.of(vectorA.vector);
-    root.setRowCount(2);
-    try (FileOutputStream fileOutputStream = new FileOutputStream(file);
-         ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
-
-      arrowWriter.start();
-      for (int i = 0; i < 4; i++) {
-        root.setRowCount(i == 2 ? 1 : 2);
-        arrowWriter.writeBatch();
-        vectorA.next();
-      }
-
-      arrowWriter.end();
-    }
-
-    vectorA.close();
-  }
-
-  class ManualDictionaryVectorA {
-
-    private final BufferAllocator allocator;
-    private Map<String, Integer> stringToIndex = new HashMap<>();
-    private int mapIndex;
-    private UInt2Vector vector;
-    private VarCharVector dictionaryVector;
-    private DictionaryEncoding dictionaryEncoding;
-    private int index;
-    private int batch;
-
-    ManualDictionaryVectorA(BufferAllocator allocator, DictionaryProvider.MapDictionaryProvider provider) {
-      this.allocator = allocator;
-      dictionaryVector = new VarCharVector("vectorA-dictionary", allocator);
-      dictionaryVector.allocateNew();
-      dictionaryEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
-      Dictionary dictionary = new Dictionary(dictionaryVector, dictionaryEncoding);
-      provider.put(dictionary);
-      vector = new UInt2Vector(
-          "vectorA",
-          new FieldType(false, new ArrowType.Int(16, false), dictionaryEncoding),
-          allocator);
-      vector.allocateNew();
-    }
-
-    void next() {
-      if (batch == 0) {
-        stringToIndex.put("foo", mapIndex++);
-        dictionaryVector.set(index, "foo".getBytes(StandardCharsets.UTF_8));
-        vector.set(index++, stringToIndex.get("foo"));
-
-        stringToIndex.put("bar", mapIndex++);
-        dictionaryVector.set(index, "bar".getBytes(StandardCharsets.UTF_8));
-        vector.set(index++, stringToIndex.get("bar"));
-        dictionaryVector.setValueCount(2);
-        vector.setValueCount(2);
-      } else if (batch == 1) {
-        dictionaryVector.reset();
-        vector.reset();
-        index = 0;
-
-        stringToIndex.put("meep", mapIndex++);
-        dictionaryVector.set(index, "meep".getBytes(StandardCharsets.UTF_8));
-        dictionaryVector.setValueCount(1);
-        vector.set(index++, stringToIndex.get("meep"));
-        vector.set(index++, stringToIndex.get("bar"));
-        dictionaryVector.setValueCount(1);
-        vector.setValueCount(2);
-      } else if (batch == 2) {
-        dictionaryVector.reset();
-        vector.reset();
-        index = 0;
-
-        stringToIndex.put("baz", mapIndex++);
-        dictionaryVector.set(index, "baz".getBytes(StandardCharsets.UTF_8));
-        vector.set(index++, stringToIndex.get("baz"));
-        dictionaryVector.setValueCount(1);
-        vector.setValueCount(1);
-      } else if (batch == 3) {
-        dictionaryVector.reset();
-        vector.reset();
-        index = 0;
-
-        vector.set(index++, stringToIndex.get("bar"));
-        vector.set(index++, stringToIndex.get("foo"));
-        dictionaryVector.setValueCount(0);
-        vector.setValueCount(2);
-      }
-      batch++;
-    }
-
-    void close() {
-      dictionaryVector.close();
-      vector.close();
-    }
-
   }
 }
