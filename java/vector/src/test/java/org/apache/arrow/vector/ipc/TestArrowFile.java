@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,7 +46,6 @@ import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.StructVector;
-import org.apache.arrow.vector.dictionary.DeltaDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryEncoder;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -55,6 +55,7 @@ import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,66 +149,51 @@ public class TestArrowFile extends BaseFileTest {
   }
 
   @Test
-  public void newdict() throws Exception {
-    File file = new File("target/mytest_multi_newdict.arrow");
-    DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
-    DictionaryEncoding de = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
-    DeltaDictionary dict = new DeltaDictionary(
-        "vectorA",
-        de,
-        new ArrowType.Utf8(),
-        new ArrowType.Int(16, false),
-        allocator
-    );
-    provider.put(dict);
+  public void testMultiBatchDeltaDictionary() throws Exception {
+    File file = new File("target/mytest_multi_delta_dictionary.arrow");
+    writeDataMultiBatchWithDictionaries(file, 1);
 
-    dict.set(0, "foo".getBytes(StandardCharsets.UTF_8));
-    dict.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-
-    VectorSchemaRoot root = VectorSchemaRoot.of(dict.getIndexVector());
-    root.setRowCount(2);
-    try (FileOutputStream fileOutputStream = new FileOutputStream(file);
-         ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
-
-      // batch 1
-      arrowWriter.start();
-      arrowWriter.writeBatch();
-      dict.reset();
-
-      // batch 2
-      dict.set(0, "meep".getBytes(StandardCharsets.UTF_8));
-      dict.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-
-      root.setRowCount(2);
-      arrowWriter.writeBatch();
-      dict.reset();
-
-      dict.set(0, "bazz".getBytes(StandardCharsets.UTF_8));
-      root.setRowCount(1);
-      arrowWriter.writeBatch();dict.reset();
-
-      dict.set(0, "bar".getBytes(StandardCharsets.UTF_8));
-      dict.set(1, "foo".getBytes(StandardCharsets.UTF_8));
-      root.setRowCount(2);
-      arrowWriter.writeBatch();
-
-      arrowWriter.end();
-    }
-    dict.close();
-
-    System.out.println("-------------READ ");
     try (FileInputStream fileInputStream = new FileInputStream(file);
          ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
-      for (ArrowBlock arrowBlock : reader.getRecordBlocks()) {
-        reader.loadRecordBatch(arrowBlock);
-        VectorSchemaRoot r = reader.getVectorSchemaRoot();
-        FieldVector dv = r.getVector("vectorA");
-        DictionaryEncoding dictionaryEncoding = dv.getField().getDictionary();
-        Dictionary d = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
-        try (ValueVector readVector = DictionaryEncoder.decode(dv, d)) {
-          System.out.println("Decoded data: " + readVector);
-        }
-      }
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      FieldVector dictionary = r.getVector("vectorA");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "foo", "bar");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "meep", "bar");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, null, "bazz");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "bar", "zap");
+    }
+  }
+
+  @Test
+  public void testMultiBatchReplacementDictionary() throws Exception {
+    File file = new File("target/mytest_multi_delta_replacement.arrow");
+    writeDataMultiBatchWithDictionaries(file, 2);
+
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      VectorSchemaRoot r = reader.getVectorSchemaRoot();
+      System.out.println(r);
+      FieldVector dictionary = r.getVector("vectorB");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "lorem", "ipsum");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "ipsum", "lorem");
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, "ipsum", null);
+
+      reader.loadNextBatch();
+      assertDictionary(dictionary, reader, null, "lorem");
     }
   }
 
@@ -242,6 +228,22 @@ public class TestArrowFile extends BaseFileTest {
       assertEquals(4,reader.getRecordBlocks().size());
       assertTrue(reader.loadRecordBatch(reader.getRecordBlocks().get(1)));
       assertVectorA(reader, root, 1);
+    }
+  }
+
+  private void assertDictionary(FieldVector encoded, ArrowFileReader reader, String... expected) throws Exception {
+    DictionaryEncoding dictionaryEncoding = encoded.getField().getDictionary();
+    Dictionary dictionary = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
+    try (ValueVector decoded = DictionaryEncoder.decode(encoded, dictionary)) {
+      Assertions.assertEquals(expected.length, encoded.getValueCount());
+      for (int i = 0; i < expected.length; i++) {
+        if (expected[i] == null) {
+          Assertions.assertNull(decoded.getObject(i));
+        } else {
+          assertNotNull(decoded.getObject(i));
+          Assertions.assertEquals(expected[i], decoded.getObject(i).toString());
+        }
+      }
     }
   }
 

@@ -114,7 +114,6 @@ public class MurmurHasher implements ArrowBufHasher {
   }
 
   public static int hashCode(byte[] buffer, int offset, int length, int seed) {
-    //if (true) return Arrays.hashCode(buffer);
     int index = offset;
     int hash = seed;
     while (index + 4 <= length) {

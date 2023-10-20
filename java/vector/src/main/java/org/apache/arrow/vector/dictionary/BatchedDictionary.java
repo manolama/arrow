@@ -30,10 +30,13 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * A dictionary implementation used for delta encoding across batches. This dictionary
- * is limited to a single column.
+ * A dictionary implementation that can be used when writing batches of data to
+ * a stream or file. Supports delta or replacement encoding.
+ *
+ *
+ *
  */
-public class DeltaDictionary implements Closeable, BaseDictionary {
+public class BatchedDictionary implements Closeable, BaseDictionary {
 
   private final DictionaryEncoding encoding;
 
@@ -44,27 +47,62 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
   private final DictionaryHashTable hashTable;
 
   private int deltaIndex;
+
   private int dictionaryIndex;
 
-  public DeltaDictionary(
+  public BatchedDictionary(
       String name,
       DictionaryEncoding encoding,
       ArrowType dictionaryType,
       ArrowType indexType,
       BufferAllocator allocator
   ) {
+    this(name, encoding, dictionaryType, indexType, allocator, "-dictionary");
+  }
+
+  public BatchedDictionary(
+      String name,
+      DictionaryEncoding encoding,
+      ArrowType dictionaryType,
+      ArrowType indexType,
+      BufferAllocator allocator,
+      String suffix
+  ) {
     this.encoding = encoding;
-    dictionary = (BaseVariableWidthVector) new FieldType(false, dictionaryType, null).createNewSingleVector(name + "-dictionary", allocator, null);
-    indexVector = (BaseIntVector) new FieldType(true, indexType, encoding).createNewSingleVector(name, allocator, null);
+    FieldVector vector = new FieldType(false, dictionaryType, null)
+        .createNewSingleVector(name + suffix, allocator, null);
+    if (!(BaseVariableWidthVector.class.isAssignableFrom(vector.getClass()))) {
+      throw new IllegalArgumentException("Dictionary must be a superclass of 'BaseVariableWidthVector' " +
+          "such as 'VarCharVector'.");
+    }
+    dictionary = (BaseVariableWidthVector) vector;
+    vector = new FieldType(true, indexType, encoding)
+        .createNewSingleVector(name, allocator, null);
+    if (!(BaseIntVector.class.isAssignableFrom(vector.getClass()))) {
+      throw new IllegalArgumentException("Index vector must be a superclass type of 'BaseIntVector' " +
+          "such as 'IntVector' or 'Uint4Vector'.");
+    }
+    indexVector = (BaseIntVector) vector;
     hashTable = new DictionaryHashTable();
   }
 
-  public DeltaDictionary(
+  public BatchedDictionary(
       FieldVector dictionary,
       FieldVector indexVector
   ) {
     this.encoding = dictionary.getField().getDictionary();
+    if (!(BaseVariableWidthVector.class.isAssignableFrom(dictionary.getClass()))) {
+      throw new IllegalArgumentException("Dictionary must be a superclass of 'BaseVariableWidthVector' " +
+          "such as 'VarCharVector'.");
+    }
+    if (dictionary.getField().isNullable()) {
+      throw new IllegalArgumentException("Dictionary must be non-nullable.");
+    }
     this.dictionary = (BaseVariableWidthVector) dictionary;
+    if (!(BaseIntVector.class.isAssignableFrom(indexVector.getClass()))) {
+      throw new IllegalArgumentException("Index vector must be a superclass type of 'BaseIntVector' " +
+          "such as 'IntVector' or 'Uint4Vector'.");
+    }
     this.indexVector = (BaseIntVector) indexVector;
     hashTable = new DictionaryHashTable();
   }
@@ -86,12 +124,24 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
   }
 
   public void set(int index, byte[] value) {
+    if (value == null) {
+      setNull(index);
+      return;
+    }
     set(index, value, 0, value.length);
   }
 
   public void set(int index, byte[] value, int offset, int len) {
+    if (value == null || len == 0) {
+      setNull(index);
+      return;
+    }
     int di = getIndex(value, offset, len);
     indexVector.setWithPossibleTruncate(index, di);
+  }
+
+  public void setNull(int index) {
+    indexVector.setNull(index);
   }
 
   private int getIndex(byte[] value, int offset, int len) {
@@ -112,13 +162,23 @@ public class DeltaDictionary implements Closeable, BaseDictionary {
     indexVector.close();
   }
 
+  public void mark() {
+    dictionary.setValueCount(dictionaryIndex);
+    // not setting the index vector value count. The root can do that.
+  }
+
   public void reset() {
     dictionaryIndex = 0;
     dictionary.reset();
     indexVector.reset();
+    if (!encoding.isDelta()) {
+      // replacement mode.
+      deltaIndex = 0;
+      hashTable.clear();
+    }
   }
 
-  public void mark() {
-    dictionary.setValueCount(dictionaryIndex);
+  DictionaryHashTable getHashTable() {
+    return hashTable;
   }
 }

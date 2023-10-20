@@ -22,6 +22,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -75,6 +77,7 @@ import org.apache.arrow.vector.complex.writer.UInt2Writer;
 import org.apache.arrow.vector.complex.writer.UInt4Writer;
 import org.apache.arrow.vector.complex.writer.UInt8Writer;
 import org.apache.arrow.vector.dictionary.BaseDictionary;
+import org.apache.arrow.vector.dictionary.BatchedDictionary;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryEncoder;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -846,5 +849,96 @@ public class BaseFileTest {
         assertEquals(j, sortedMapReader.value().readInteger().intValue());
       }
     }
+  }
+
+  /**
+   * state == 1, one delta dictionary.
+   * state == 2, one standalone dictionary.
+   * state == 3, one of each
+   */
+  protected void writeDataMultiBatchWithDictionaries(File file, int state) throws IOException {
+    DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
+    DictionaryEncoding deltaEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
+    DictionaryEncoding replacementEncoding = new DictionaryEncoding(24, false, new ArrowType.Int(16, false), false);
+
+    try (BatchedDictionary delta = newDictionary("vectorA", deltaEncoding);
+         BatchedDictionary replacement = newDictionary("vectorB",replacementEncoding)) {
+      switch (state) {
+        case 1:
+          provider.put(delta);
+          break;
+        case 2:
+          provider.put(replacement);
+          break;
+        case 3:
+          provider.put(delta);
+          provider.put(replacement);
+      }
+
+      delta.set(0, "foo".getBytes(StandardCharsets.UTF_8));
+      delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
+      replacement.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
+      replacement.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
+
+      VectorSchemaRoot root = null;
+      switch (state) {
+        case 1:
+          root = VectorSchemaRoot.of(delta.getIndexVector());
+          break;
+        case 2:
+          root = VectorSchemaRoot.of(replacement.getIndexVector());
+          break;
+        case 3:
+          root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector());
+      }
+      root.setRowCount(2);
+      try (FileOutputStream fileOutputStream = new FileOutputStream(file);
+           ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
+
+        // batch 1
+        arrowWriter.start();
+        arrowWriter.writeBatch();
+        delta.reset();
+
+        // batch 2
+        delta.set(0, "meep".getBytes(StandardCharsets.UTF_8));
+        delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
+        replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+
+        root.setRowCount(2);
+        arrowWriter.writeBatch();
+        delta.reset();
+
+        // batch 3
+        delta.setNull(0);
+        delta.set(1, "bazz".getBytes(StandardCharsets.UTF_8));
+        replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        replacement.setNull(1);
+        root.setRowCount(2);
+        arrowWriter.writeBatch();
+        delta.reset();
+
+        // batch 4
+        delta.set(0, "bar".getBytes(StandardCharsets.UTF_8));
+        delta.set(1, "zap".getBytes(StandardCharsets.UTF_8));
+        replacement.setNull(0);
+        replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        root.setRowCount(2);
+        arrowWriter.writeBatch();
+
+        arrowWriter.end();
+      }
+    }
+  }
+
+  BatchedDictionary newDictionary(String name, DictionaryEncoding encoding) {
+    return new BatchedDictionary(
+        name,
+        encoding,
+        new ArrowType.Utf8(),
+        new ArrowType.Int(16, false),
+        allocator
+    );
   }
 }
