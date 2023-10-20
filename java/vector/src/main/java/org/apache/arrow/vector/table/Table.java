@@ -120,7 +120,7 @@ public class Table extends BaseTable implements Iterable<Row> {
         destVector.copyFromSafe(0, srcVector.getValueCount(), srcVector); // TODO: Remove safe copy for perf
         DictionaryEncoding srcEncoding = src.getEncoding();
         Dictionary dest = new Dictionary(destVector,
-            new DictionaryEncoding(srcEncoding.getId(), srcEncoding.isOrdered(), srcEncoding.getIndexType()));
+            new DictionaryEncoding(srcEncoding.getId(), srcEncoding.isOrdered(), srcEncoding.getIndexType(), srcEncoding.isDelta()));
         dictionaryCopies[i] = dest;
         i++;
       }

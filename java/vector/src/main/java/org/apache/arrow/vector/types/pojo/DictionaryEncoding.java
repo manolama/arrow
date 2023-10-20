@@ -43,11 +43,7 @@ public class DictionaryEncoding {
    * @param indexType (nullable). The integer type to use for indexing in the dictionary. Defaults to a signed
    *     32 bit integer.
    */
-  @JsonCreator
-  public DictionaryEncoding(
-      @JsonProperty("id") long id,
-      @JsonProperty("isOrdered") boolean ordered,
-      @JsonProperty("indexType") Int indexType) {
+  public DictionaryEncoding(long id, boolean ordered, Int indexType) {
     this(id, ordered, indexType, false);
   }
 
@@ -65,11 +61,11 @@ public class DictionaryEncoding {
       @JsonProperty("id") long id,
       @JsonProperty("isOrdered") boolean ordered,
       @JsonProperty("indexType") Int indexType,
-      @JsonProperty("isDelta") boolean isDelta) {
+      @JsonProperty("isDelta") Boolean isDelta) {
     this.id = id;
     this.ordered = ordered;
     this.indexType = indexType == null ? new Int(32, true) : indexType;
-    this.isDelta = isDelta;
+    this.isDelta = isDelta == null ? false : isDelta;
   }
 
   public long getId() {
