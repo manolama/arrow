@@ -147,11 +147,7 @@ public class ArrowFileReader extends ArrowReader {
       ArrowBlock block = footer.getRecordBatches().get(currentRecordBatch++);
       ArrowRecordBatch batch = readRecordBatch(in, block, allocator);
       loadRecordBatch(batch);
-
-      // Read and load all dictionaries from schema
-      System.out.println("DICTS: " + dictionaries);
       loadDictionaries();
-
       return true;
     } else {
       return false;

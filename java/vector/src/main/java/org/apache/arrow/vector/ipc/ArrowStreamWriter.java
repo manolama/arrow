@@ -42,7 +42,7 @@ import org.apache.arrow.vector.ipc.message.MessageSerializer;
  * Writer for the Arrow stream format to send ArrowRecordBatches over a WriteChannel.
  */
 public class ArrowStreamWriter extends ArrowWriter {
-  private final Map<Long, FieldVector> previousDictionaries = new HashMap<>();
+  private final Map<Long, Boolean> previousDictionaries = new HashMap<>();
 
   /**
    * Construct an ArrowStreamWriter with an optional DictionaryProvider for the OutputStream.
@@ -137,30 +137,15 @@ public class ArrowStreamWriter extends ArrowWriter {
     // write out any dictionaries that have changes
     for (long id : dictionaryIdsUsed) {
       BaseDictionary dictionary = provider.lookup(id);
-      FieldVector vector = dictionary.getVector();
-      if (previousDictionaries.containsKey(id) &&
-          VectorEqualsVisitor.vectorEquals(vector, previousDictionaries.get(id))) {
-        // Dictionary was previously written and hasn't changed
-        continue;
-      }
-      boolean isDelta = previousDictionaries.containsKey(id) ? dictionary.getEncoding().isDelta() : false;
-      writeDictionaryBatch(dictionary, isDelta);
-      // Store a copy of the vector in case it is later mutated
-      if (previousDictionaries.containsKey(id)) {
-        previousDictionaries.get(id).close();
-      }
-      previousDictionaries.put(id, copyVector(vector));
+      boolean isInitial = previousDictionaries.containsKey(id) ? false : true;
+      writeDictionaryBatch(dictionary, isInitial);
+      previousDictionaries.put(id, true);
     }
   }
 
   @Override
   public void close() {
     super.close();
-    try {
-      AutoCloseables.close(previousDictionaries.values());
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   private static FieldVector copyVector(FieldVector source) {

@@ -154,6 +154,7 @@ public class ArrowStreamReader extends ArrowReader {
 
       // For zero-length batches, need an empty buffer to deserialize the batch
       if (bodyBuffer == null) {
+        System.out.println("[STREAM]  WTF? Zero length batch");
         bodyBuffer = allocator.getEmpty();
       }
 
@@ -177,10 +178,6 @@ public class ArrowStreamReader extends ArrowReader {
    * When read a record batch, check whether its dictionaries are available.
    */
   private void checkDictionaries() throws IOException {
-    // if all dictionaries are loaded, return.
-    if (loadedDictionaryCount == dictionaries.size()) {
-      return;
-    }
     for (FieldVector vector : getVectorSchemaRoot().getFieldVectors()) {
       DictionaryEncoding encoding = vector.getField().getDictionary();
       if (encoding != null) {

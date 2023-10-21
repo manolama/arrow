@@ -234,15 +234,17 @@ public abstract class ArrowReader implements DictionaryProvider, AutoCloseable {
       throw new IllegalArgumentException("Dictionary ID " + id + " not defined in schema");
     }
     FieldVector vector = dictionary.getVector();
-    System.out.println("------ loading dict " + id + " => " + vector);
+    System.out.println("------ appending " + id + ". Existing dict: " + vector);
     // if is deltaVector, concat it with non-delta vector with the same ID.
     if (dictionaryBatch.isDelta()) {
       try (FieldVector deltaVector = vector.getField().createVector(allocator)) {
         load(dictionaryBatch, deltaVector);
         VectorBatchAppender.batchAppend(vector, deltaVector);
-        System.out.println("   Concat: " + vector.getValueCount());
+        System.out.println("   Concat: " + vector.getValueCount() + " => " + vector);
       }
       return;
+    } else {
+      System.out.println("   Not delta????");
     }
 
     load(dictionaryBatch, vector);

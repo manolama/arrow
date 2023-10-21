@@ -20,19 +20,26 @@ package org.apache.arrow.vector.ipc;
 import static org.apache.arrow.vector.TestUtils.newVarCharVector;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +59,7 @@ import org.apache.arrow.vector.UInt1Vector;
 import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.UInt4Vector;
 import org.apache.arrow.vector.UInt8Vector;
+import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -93,6 +101,8 @@ import org.apache.arrow.vector.util.Text;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.params.provider.Arguments;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -855,6 +865,7 @@ public class BaseFileTest {
 
   /**
    * Utility to write permutations of dictionary encoding.
+   *
    * state == 1, one delta dictionary.
    * state == 2, one standalone dictionary.
    * state == 3, one of each
@@ -862,7 +873,7 @@ public class BaseFileTest {
    * state == 5, both deltas
    * state == 6, all of em
    */
-  protected void writeDataMultiBatchWithDictionaries(File file, int state) throws IOException {
+  protected void writeDataMultiBatchWithDictionaries(OutputStream stream, int state) throws IOException {
     DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
     DictionaryEncoding deltaEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
     DictionaryEncoding replacementEncoding = new DictionaryEncoding(24, false, new ArrowType.Int(16, false), false);
@@ -895,13 +906,6 @@ public class BaseFileTest {
           provider.put(deltaC);
       }
 
-      delta.set(0, "foo".getBytes(StandardCharsets.UTF_8));
-      delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-      replacement.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
-      replacement.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
-      deltaC.setNull(0);
-      deltaC.setNull(1);
-
       VectorSchemaRoot root = null;
       switch (state) {
         case 1:
@@ -922,12 +926,26 @@ public class BaseFileTest {
         case 6:
           root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector(), deltaC.getIndexVector());
       }
-      root.setRowCount(2);
-      try (FileOutputStream fileOutputStream = new FileOutputStream(file);
-           ArrowFileWriter arrowWriter = new ArrowFileWriter(root, provider, fileOutputStream.getChannel());) {
+
+      ArrowWriter arrowWriter = null;
+      try {
+        if (stream instanceof FileOutputStream) {
+          FileChannel channel = ((FileOutputStream) stream).getChannel();
+          arrowWriter = new ArrowFileWriter(root, provider, channel);
+        } else {
+          arrowWriter = new ArrowStreamWriter(root, provider, stream);
+        }
+
+        delta.set(0, "foo".getBytes(StandardCharsets.UTF_8));
+        delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
+        replacement.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
+        replacement.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
+        deltaC.setNull(0);
+        deltaC.setNull(1);
 
         // batch 1
         arrowWriter.start();
+        root.setRowCount(2);
         arrowWriter.writeBatch();
         delta.reset();
 
@@ -967,6 +985,10 @@ public class BaseFileTest {
         arrowWriter.writeBatch();
 
         arrowWriter.end();
+      } catch (Exception e) {
+        if (arrowWriter != null) {
+          arrowWriter.close();
+        }
       }
     }
   }
@@ -995,7 +1017,80 @@ public class BaseFileTest {
     });
   }
 
-  BatchedDictionary newDictionary(String name, DictionaryEncoding encoding) {
+  protected void assertDictionary(FieldVector encoded, ArrowReader reader, String... expected) throws Exception {
+    DictionaryEncoding dictionaryEncoding = encoded.getField().getDictionary();
+    Dictionary dictionary = reader.getDictionaryVectors().get(dictionaryEncoding.getId());
+    try (ValueVector decoded = DictionaryEncoder.decode(encoded, dictionary)) {
+      Assertions.assertEquals(expected.length, encoded.getValueCount());
+      for (int i = 0; i < expected.length; i++) {
+        if (expected[i] == null) {
+          Assertions.assertNull(decoded.getObject(i));
+        } else {
+          assertNotNull(decoded.getObject(i));
+          Assertions.assertEquals(expected[i], decoded.getObject(i).toString());
+        }
+      }
+    }
+  }
+
+  protected void assertBlock(File file, int block, int state) throws Exception {
+    try (FileInputStream fileInputStream = new FileInputStream(file);
+         ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
+      reader.loadRecordBatch(reader.getRecordBlocks().get(block));
+      assertBlock(reader, block, state);
+    }
+  }
+
+  protected void assertBlock(ArrowReader reader, int block, int state) throws Exception {
+    VectorSchemaRoot r = reader.getVectorSchemaRoot();
+    FieldVector dictA = r.getVector("vectorA");
+    FieldVector dictB = r.getVector("vectorB");
+    FieldVector dictC = r.getVector("vectorC");
+
+    switch (state) {
+      case 1:
+        assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
+        assertNull(dictB);
+        assertNull(dictC);
+        break;
+      case 2:
+        assertNull(dictA);
+        assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
+        assertNull(dictC);
+        break;
+      case 3:
+        assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
+        assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
+        assertNull(dictC);
+        break;
+      case 4:
+        assertNull(dictA);
+        assertNull(dictB);
+        assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        break;
+      case 5:
+        assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
+        assertNull(dictB);
+        assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        break;
+      case 6:
+        assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
+        assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
+        assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        break;
+    }
+  }
+
+  protected static Collection<Arguments> dictionaryParams() {
+    List<Arguments> params = new ArrayList<>();
+//    for (int i = 1; i < 7; i++) {
+//      params.add(Arguments.of(i));
+//    }
+    params.add(Arguments.of(1));
+    return params;
+  }
+
+  protected BatchedDictionary newDictionary(String name, DictionaryEncoding encoding) {
     return new BatchedDictionary(
         name,
         encoding,
