@@ -872,59 +872,69 @@ public class BaseFileTest {
    * state == 4, delta with nothing at start and end
    * state == 5, both deltas
    * state == 6, all of em
+   * state == 7, replacement dictionary
    */
   protected void writeDataMultiBatchWithDictionaries(OutputStream stream, int state) throws IOException {
     DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
     DictionaryEncoding deltaEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
     DictionaryEncoding replacementEncoding = new DictionaryEncoding(24, false, new ArrowType.Int(16, false), false);
     DictionaryEncoding deltaCEncoding = new DictionaryEncoding(1, false, new ArrowType.Int(16, false), true);
+    DictionaryEncoding replacementEncodingUpdated = new DictionaryEncoding(2, false, new ArrowType.Int(16, false), false);
 
-    try (BatchedDictionary delta = newDictionary("vectorA", deltaEncoding);
-         BatchedDictionary replacement = newDictionary("vectorB",replacementEncoding);
-         BatchedDictionary deltaC = newDictionary("vectorC", deltaCEncoding)) {
+    boolean isFile = stream instanceof FileOutputStream;
+    try (BatchedDictionary vectorA = newDictionary("vectorA", deltaEncoding, isFile);
+         BatchedDictionary vectorB = newDictionary("vectorB",replacementEncoding, isFile);
+         BatchedDictionary vectorC = newDictionary("vectorC", deltaCEncoding, isFile);
+         BatchedDictionary vectorD = newDictionary("vectorD", replacementEncoding, isFile);) {
       switch (state) {
         case 1:
-          provider.put(delta);
+          provider.put(vectorA);
           break;
         case 2:
-          provider.put(replacement);
+          provider.put(vectorB);
           break;
         case 3:
-          provider.put(delta);
-          provider.put(replacement);
+          provider.put(vectorA);
+          provider.put(vectorB);
           break;
         case 4:
-          provider.put(deltaC);
+          provider.put(vectorC);
           break;
         case 5:
-          provider.put(delta);
-          provider.put(deltaC);
+          provider.put(vectorA);
+          provider.put(vectorC);
           break;
         case 6:
-          provider.put(delta);
-          provider.put(replacement);
-          provider.put(deltaC);
+          provider.put(vectorA);
+          provider.put(vectorB);
+          provider.put(vectorC);
+          break;
+        case 7:
+          provider.put(vectorD);
       }
 
       VectorSchemaRoot root = null;
       switch (state) {
         case 1:
-          root = VectorSchemaRoot.of(delta.getIndexVector());
+          root = VectorSchemaRoot.of(vectorA.getIndexVector());
           break;
         case 2:
-          root = VectorSchemaRoot.of(replacement.getIndexVector());
+          root = VectorSchemaRoot.of(vectorB.getIndexVector());
           break;
         case 3:
-          root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector());
+          root = VectorSchemaRoot.of(vectorA.getIndexVector(), vectorB.getIndexVector());
           break;
         case 4:
-          root = VectorSchemaRoot.of(deltaC.getIndexVector());
+          root = VectorSchemaRoot.of(vectorC.getIndexVector());
           break;
         case 5:
-          root = VectorSchemaRoot.of(delta.getIndexVector(), deltaC.getIndexVector());
+          root = VectorSchemaRoot.of(vectorA.getIndexVector(), vectorC.getIndexVector());
           break;
         case 6:
-          root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector(), deltaC.getIndexVector());
+          root = VectorSchemaRoot.of(vectorA.getIndexVector(), vectorB.getIndexVector(), vectorC.getIndexVector());
+          break;
+        case 7:
+          root = VectorSchemaRoot.of(vectorD.getIndexVector());
       }
 
       ArrowWriter arrowWriter = null;
@@ -936,50 +946,73 @@ public class BaseFileTest {
           arrowWriter = new ArrowStreamWriter(root, provider, stream);
         }
 
-        delta.set(0, "foo".getBytes(StandardCharsets.UTF_8));
-        delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-        replacement.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
-        replacement.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
-        deltaC.setNull(0);
-        deltaC.setNull(1);
+        vectorA.set(0, "foo".getBytes(StandardCharsets.UTF_8));
+        vectorA.set(1, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorB.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorB.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorC.setNull(0);
+        vectorC.setNull(1);
+        vectorD.set(0, "porro".getBytes(StandardCharsets.UTF_8));
+        vectorD.set(1, "amet".getBytes(StandardCharsets.UTF_8));
 
         // batch 1
         arrowWriter.start();
         root.setRowCount(2);
         arrowWriter.writeBatch();
-        delta.reset();
+//        vectorA.reset();
+//        vectorB.reset();
+//        vectorC.reset();
+//        vectorD.reset();
 
         // batch 2
-        delta.set(0, "meep".getBytes(StandardCharsets.UTF_8));
-        delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-        replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
-        replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
-        deltaC.set(0, "qui".getBytes(StandardCharsets.UTF_8));
-        deltaC.set(1, "dolor".getBytes(StandardCharsets.UTF_8));
+        vectorA.set(0, "meep".getBytes(StandardCharsets.UTF_8));
+        vectorA.set(1, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorB.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorB.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorC.set(0, "qui".getBytes(StandardCharsets.UTF_8));
+        vectorC.set(1, "dolor".getBytes(StandardCharsets.UTF_8));
+        vectorD.set(0, "amet".getBytes(StandardCharsets.UTF_8));
+        if (state == 7) {
+          vectorD.set(1, "quia".getBytes(StandardCharsets.UTF_8));
+        }
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
-        delta.reset();
+//        vectorA.reset();
+//        vectorB.reset();
+//        vectorC.reset();
+//        vectorD.reset();
 
         // batch 3
-        delta.setNull(0);
-        delta.setNull(1);
-        replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
-        replacement.setNull(1);
-        deltaC.setNull(0);
-        deltaC.set(1, "qui".getBytes(StandardCharsets.UTF_8));
+        vectorA.setNull(0);
+        vectorA.setNull(1);
+        vectorB.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorB.setNull(1);
+        vectorC.setNull(0);
+        vectorC.set(1, "qui".getBytes(StandardCharsets.UTF_8));
+        vectorD.setNull(0);
+        if (state == 7) {
+          vectorD.set(1, "quia".getBytes(StandardCharsets.UTF_8));
+        }
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
-        delta.reset();
+//        vectorA.reset();
+//        vectorB.reset();
+//        vectorC.reset();
+//        vectorD.reset();
 
         // batch 4
-        delta.set(0, "bar".getBytes(StandardCharsets.UTF_8));
-        delta.set(1, "zap".getBytes(StandardCharsets.UTF_8));
-        replacement.setNull(0);
-        replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
-        deltaC.setNull(0);
-        deltaC.setNull(1);
+        vectorA.set(0, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorA.set(1, "zap".getBytes(StandardCharsets.UTF_8));
+        vectorB.setNull(0);
+        vectorB.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorC.setNull(0);
+        vectorC.setNull(1);
+        if (state == 7) {
+          vectorD.set(0, "quia".getBytes(StandardCharsets.UTF_8));
+        }
+        vectorD.setNull(1);
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
@@ -989,6 +1022,7 @@ public class BaseFileTest {
         if (arrowWriter != null) {
           arrowWriter.close();
         }
+        throw e;
       }
     }
   }
@@ -998,22 +1032,26 @@ public class BaseFileTest {
     valuesPerBlock.put(0, new String[][]{
         {"foo", "bar"},
         {"lorem", "ipsum"},
-        {null, null}
+        {null, null},
+        {"porro", "amet"}
     });
     valuesPerBlock.put(1, new String[][]{
         {"meep", "bar"},
         {"ipsum", "lorem"},
-        {"qui", "dolor"}
+        {"qui", "dolor"},
+        {"amet", "quia"}
     });
     valuesPerBlock.put(2, new String[][]{
         {null, null},
         {"ipsum", null},
-        {null, "qui"}
+        {null, "qui"},
+        {null, "quia"}
     });
     valuesPerBlock.put(3, new String[][]{
         {"bar", "zap"},
         {null, "lorem"},
-        {null, null}
+        {null, null},
+        {"quia", null}
     });
   }
 
@@ -1046,56 +1084,69 @@ public class BaseFileTest {
     FieldVector dictA = r.getVector("vectorA");
     FieldVector dictB = r.getVector("vectorB");
     FieldVector dictC = r.getVector("vectorC");
+    FieldVector dictD = r.getVector("vectorD");
 
     switch (state) {
       case 1:
         assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
         assertNull(dictB);
         assertNull(dictC);
+        assertNull(dictD);
         break;
       case 2:
         assertNull(dictA);
         assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
         assertNull(dictC);
+        assertNull(dictD);
         break;
       case 3:
         assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
         assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
         assertNull(dictC);
+        assertNull(dictD);
         break;
       case 4:
         assertNull(dictA);
         assertNull(dictB);
         assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        assertNull(dictD);
         break;
       case 5:
         assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
         assertNull(dictB);
         assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        assertNull(dictD);
         break;
       case 6:
         assertDictionary(dictA, reader, valuesPerBlock.get(block)[0]);
         assertDictionary(dictB, reader, valuesPerBlock.get(block)[1]);
         assertDictionary(dictC, reader, valuesPerBlock.get(block)[2]);
+        assertNull(dictD);
+        break;
+      case 7:
+        assertNull(dictA);
+        assertNull(dictB);
+        assertNull(dictC);
+        assertDictionary(dictD, reader, valuesPerBlock.get(block)[3]);
         break;
     }
   }
 
   protected static Collection<Arguments> dictionaryParams() {
     List<Arguments> params = new ArrayList<>();
-//    for (int i = 1; i < 7; i++) {
-//      params.add(Arguments.of(i));
-//    }
-    params.add(Arguments.of(1));
+    for (int i = 1; i < 8; i++) {
+      params.add(Arguments.of(i));
+    }
     return params;
   }
 
-  protected BatchedDictionary newDictionary(String name, DictionaryEncoding encoding) {
+  protected BatchedDictionary newDictionary(String name, DictionaryEncoding encoding, boolean isFile) {
     return new BatchedDictionary(
         name,
         encoding,
         new ArrowType.Utf8(),
         new ArrowType.Int(16, false),
+        isFile,
         allocator
     );
   }

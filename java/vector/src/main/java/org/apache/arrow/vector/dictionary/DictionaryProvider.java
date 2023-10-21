@@ -32,6 +32,8 @@ public interface DictionaryProvider {
   /** Get all dictionary IDs. */
   Set<Long> getDictionaryIds();
 
+  void resetBatchedDictionaries();
+
   /**
    * Implementation of {@link DictionaryProvider} that is backed by a hash-map.
    */
@@ -61,6 +63,15 @@ public interface DictionaryProvider {
     @Override
     public BaseDictionary lookup(long id) {
       return map.get(id);
+    }
+
+    @Override
+    public void resetBatchedDictionaries() {
+      map.values().forEach( dictionary -> {
+        if (dictionary instanceof BatchedDictionary) {
+          ((BatchedDictionary) dictionary).reset();
+        }
+      });
     }
   }
 }

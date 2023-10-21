@@ -130,6 +130,11 @@ public abstract class ArrowReader implements DictionaryProvider, AutoCloseable {
     close(true);
   }
 
+  @Override
+  public void resetBatchedDictionaries() {
+    // no-op
+  }
+
   /**
    * Close resources, including vector schema root and dictionary vectors. If the flag
    * closeReadChannel is true then close the underlying read source, otherwise leave it open.
@@ -234,7 +239,7 @@ public abstract class ArrowReader implements DictionaryProvider, AutoCloseable {
       throw new IllegalArgumentException("Dictionary ID " + id + " not defined in schema");
     }
     FieldVector vector = dictionary.getVector();
-    System.out.println("------ appending " + id + ". Existing dict: " + vector);
+    System.out.println("------ Loading dictionary " + id + ". Existing dict: " + vector);
     // if is deltaVector, concat it with non-delta vector with the same ID.
     if (dictionaryBatch.isDelta()) {
       try (FieldVector deltaVector = vector.getField().createVector(allocator)) {

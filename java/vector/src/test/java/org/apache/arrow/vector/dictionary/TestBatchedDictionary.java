@@ -124,6 +124,7 @@ public class TestBatchedDictionary {
         DELTA,
         dictType,
         indexType,
+        false,
         allocator
     )) { }
   }
@@ -135,7 +136,8 @@ public class TestBatchedDictionary {
          FieldVector indexVector = new FieldType(false, indexType, SINGLE).createNewSingleVector("i", allocator, null);) {
       new BatchedDictionary(
           dictVector,
-          indexVector
+          indexVector,
+          false
       ).close();
     }
   }
@@ -149,6 +151,7 @@ public class TestBatchedDictionary {
           SINGLE,
           dictType,
           indexType,
+          false,
           allocator
       );
     });
@@ -162,7 +165,8 @@ public class TestBatchedDictionary {
            FieldVector indexVector = new FieldType(false, indexType, SINGLE).createNewSingleVector("i", allocator, null);) {
         new BatchedDictionary(
             dictVector,
-            indexVector
+            indexVector,
+            false
         ).close();
       }
     });
@@ -175,6 +179,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       assertEquals("vector-dictionary", dictionary.getVector().getField().getName());
@@ -189,6 +194,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.set(0, FOO);
@@ -207,7 +213,8 @@ public class TestBatchedDictionary {
     List<FieldVector> vectors = existingVectors(SINGLE);
     try (BatchedDictionary dictionary = new BatchedDictionary(
         vectors.get(0),
-        vectors.get(1)
+        vectors.get(1),
+        false
     )) {
       dictionary.set(0, FOO);
       dictionary.set(1, BAR);
@@ -227,6 +234,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.setNull(0);
@@ -245,7 +253,8 @@ public class TestBatchedDictionary {
     List<FieldVector> vectors = existingVectors(SINGLE);
     try (BatchedDictionary dictionary = new BatchedDictionary(
         vectors.get(0),
-        vectors.get(1)
+        vectors.get(1),
+        false
     )) {
       dictionary.setNull(0);
       dictionary.set(1, BAR);
@@ -265,6 +274,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.set(0, FOO);
@@ -286,6 +296,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.set(0, FOO);
@@ -315,6 +326,7 @@ public class TestBatchedDictionary {
         DELTA,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.set(0, FOO);
@@ -351,6 +363,7 @@ public class TestBatchedDictionary {
         SINGLE,
         validDictionaryTypes.get(0),
         validIndexTypes.get(0),
+        false,
         allocator
     )) {
       dictionary.set(0, null);
@@ -360,6 +373,26 @@ public class TestBatchedDictionary {
       assertEquals(0, dictionary.getIndexVector().getValueCount());
       dictionary.getIndexVector().setValueCount(2);
       assertDecoded(dictionary, null, "bar");
+    }
+  }
+
+  @Test
+  public void testReplacementNotAllowed() throws IOException {
+    try (BatchedDictionary dictionary = new BatchedDictionary(
+        "vector",
+        SINGLE,
+        validDictionaryTypes.get(0),
+        validIndexTypes.get(0),
+        true,
+        allocator
+    )) {
+      dictionary.set(0, FOO);
+      dictionary.set(1, BAR);
+      dictionary.reset();
+      dictionary.set(0, BAR);
+      assertThrows(IllegalStateException.class, () -> {
+        dictionary.set(1, BAZ);
+      });
     }
   }
 

@@ -135,10 +135,9 @@ public class ArrowFileWriter extends ArrowWriter {
         BaseDictionary dictionary = provider.lookup(id);
         if (dictionary.getEncoding().isDelta()) {
           writeDictionaryBatch(dictionary, false);
-          System.out.println("**** Wrote delta for " + id + " => " + dictionary.getVector());
-        } else {
-          //throw new IllegalStateException("Replacement dictionaries not allowed in IPC File format. Dictionary ID: " + dictionary.getEncoding().getId());
         }
+        // TODO - It would be useful to throw an exception here if a replacement dictionary was found
+        // with modifications. Replacements are not currently allowed in files. For now, we just drop it.
       }
       return;
     }
@@ -149,7 +148,6 @@ public class ArrowFileWriter extends ArrowWriter {
     for (long id : dictionaryIdsUsed) {
       BaseDictionary dictionary = provider.lookup(id);
       writeDictionaryBatch(dictionary, true);
-      System.out.println("**** Wrote dict " + id + " => " + dictionary.getVector());
     }
   }
 

@@ -237,6 +237,11 @@ public class JsonFileReader implements AutoCloseable, DictionaryProvider {
     }
   }
 
+  @Override
+  public void resetBatchedDictionaries() {
+    // no-op
+  }
+
   private abstract class BufferReader {
     protected abstract ArrowBuf read(BufferAllocator allocator, int count) throws IOException;
 

@@ -124,6 +124,9 @@ public abstract class ArrowWriter implements AutoCloseable {
     try (ArrowRecordBatch batch = unloader.getRecordBatch()) {
       writeRecordBatch(batch);
     }
+    if (dictionaryProvider != null) {
+      dictionaryProvider.resetBatchedDictionaries();
+    }
   }
 
   protected void writeDictionaryBatch(BaseDictionary dictionary, boolean initial) throws IOException {

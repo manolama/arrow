@@ -20,6 +20,7 @@ package org.apache.arrow.vector.ipc;
 import static java.nio.channels.Channels.newChannel;
 import static org.apache.arrow.vector.TestUtils.newVarCharVector;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -155,7 +156,12 @@ public class TestArrowFile extends BaseFileTest {
   public void testMultiBatchDictionaries(int state) throws Exception {
     File file = new File("target/mytest_multi_batch_dictionaries_" + state + ".arrow");
     try (FileOutputStream stream = new FileOutputStream(file)) {
-      writeDataMultiBatchWithDictionaries(stream, state);
+      if (state == 7) {
+        assertThrows(IllegalStateException.class, () -> writeDataMultiBatchWithDictionaries(stream, state));
+        return;
+      } else {
+        writeDataMultiBatchWithDictionaries(stream, state);
+      }
     }
 
     try (FileInputStream fileInputStream = new FileInputStream(file);
@@ -172,7 +178,12 @@ public class TestArrowFile extends BaseFileTest {
   public void testMultiBatchDictionariesOutOfOrder(int state) throws Exception {
     File file = new File("target/mytest_multi_batch_dictionaries_ooo_" + state + ".arrow");
     try (FileOutputStream stream = new FileOutputStream(file)) {
-      writeDataMultiBatchWithDictionaries(stream, state);
+      if (state == 7) {
+        assertThrows(IllegalStateException.class, () -> writeDataMultiBatchWithDictionaries(stream, state));
+        return;
+      } else {
+        writeDataMultiBatchWithDictionaries(stream, state);
+      }
     }
     try (FileInputStream fileInputStream = new FileInputStream(file);
          ArrowFileReader reader = new ArrowFileReader(fileInputStream.getChannel(), allocator);) {
@@ -190,7 +201,12 @@ public class TestArrowFile extends BaseFileTest {
   public void testMultiBatchDictionariesSeek(int state) throws Exception {
     File file = new File("target/mytest_multi_batch_dictionaries_seek_" + state + ".arrow");
     try (FileOutputStream stream = new FileOutputStream(file)) {
-      writeDataMultiBatchWithDictionaries(stream, state);
+      if (state == 7) {
+        assertThrows(IllegalStateException.class, () -> writeDataMultiBatchWithDictionaries(stream, state));
+        return;
+      } else {
+        writeDataMultiBatchWithDictionaries(stream, state);
+      }
     }
     for (int i = 0; i < 4; i++) {
       assertBlock(file, i, state);

@@ -46,18 +46,23 @@ public class BatchedDictionary implements Closeable, BaseDictionary {
 
   private final DictionaryHashTable hashTable;
 
+  private final boolean forFileIPC;
+
   private int deltaIndex;
 
   private int dictionaryIndex;
+
+  private boolean wasReset;
 
   public BatchedDictionary(
       String name,
       DictionaryEncoding encoding,
       ArrowType dictionaryType,
       ArrowType indexType,
+      boolean forFileIPC,
       BufferAllocator allocator
   ) {
-    this(name, encoding, dictionaryType, indexType, allocator, "-dictionary");
+    this(name, encoding, dictionaryType, indexType, forFileIPC, allocator, "-dictionary");
   }
 
   public BatchedDictionary(
@@ -65,10 +70,12 @@ public class BatchedDictionary implements Closeable, BaseDictionary {
       DictionaryEncoding encoding,
       ArrowType dictionaryType,
       ArrowType indexType,
+      boolean forFileIPC,
       BufferAllocator allocator,
       String suffix
   ) {
     this.encoding = encoding;
+    this.forFileIPC = forFileIPC;
     FieldVector vector = new FieldType(false, dictionaryType, null)
         .createNewSingleVector(name + suffix, allocator, null);
     if (!(BaseVariableWidthVector.class.isAssignableFrom(vector.getClass()))) {
@@ -88,9 +95,11 @@ public class BatchedDictionary implements Closeable, BaseDictionary {
 
   public BatchedDictionary(
       FieldVector dictionary,
-      FieldVector indexVector
+      FieldVector indexVector,
+      boolean forFileIPC
   ) {
     this.encoding = dictionary.getField().getDictionary();
+    this.forFileIPC = forFileIPC;
     if (!(BaseVariableWidthVector.class.isAssignableFrom(dictionary.getClass()))) {
       throw new IllegalArgumentException("Dictionary must be a superclass of 'BaseVariableWidthVector' " +
           "such as 'VarCharVector'.");
@@ -150,6 +159,10 @@ public class BatchedDictionary implements Closeable, BaseDictionary {
     if (i >= 0) {
       return i;
     } else {
+      if (wasReset && forFileIPC && !encoding.isDelta()) {
+        throw new IllegalStateException("Dictionary was reset and is not in delta mode. " +
+            "This is not supported for file IPC.");
+      }
       hashTable.addEntry(hash, deltaIndex);
       dictionary.setSafe(dictionaryIndex++, value, offset, len);
       return deltaIndex++;
@@ -168,10 +181,11 @@ public class BatchedDictionary implements Closeable, BaseDictionary {
   }
 
   public void reset() {
+    wasReset = true;
     dictionaryIndex = 0;
     dictionary.reset();
     indexVector.reset();
-    if (!encoding.isDelta()) {
+    if (!forFileIPC && !encoding.isDelta()) {
       // replacement mode.
       deltaIndex = 0;
       hashTable.clear();
