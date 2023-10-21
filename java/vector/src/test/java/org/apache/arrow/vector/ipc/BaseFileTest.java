@@ -33,7 +33,9 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.arrow.memory.ArrowBuf;
 import org.apache.arrow.memory.BufferAllocator;
@@ -852,17 +854,23 @@ public class BaseFileTest {
   }
 
   /**
+   * Utility to write permutations of dictionary encoding.
    * state == 1, one delta dictionary.
    * state == 2, one standalone dictionary.
    * state == 3, one of each
+   * state == 4, delta with nothing at start and end
+   * state == 5, both deltas
+   * state == 6, all of em
    */
   protected void writeDataMultiBatchWithDictionaries(File file, int state) throws IOException {
     DictionaryProvider.MapDictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
     DictionaryEncoding deltaEncoding = new DictionaryEncoding(42, false, new ArrowType.Int(16, false), true);
     DictionaryEncoding replacementEncoding = new DictionaryEncoding(24, false, new ArrowType.Int(16, false), false);
+    DictionaryEncoding deltaCEncoding = new DictionaryEncoding(1, false, new ArrowType.Int(16, false), true);
 
     try (BatchedDictionary delta = newDictionary("vectorA", deltaEncoding);
-         BatchedDictionary replacement = newDictionary("vectorB",replacementEncoding)) {
+         BatchedDictionary replacement = newDictionary("vectorB",replacementEncoding);
+         BatchedDictionary deltaC = newDictionary("vectorC", deltaCEncoding)) {
       switch (state) {
         case 1:
           provider.put(delta);
@@ -873,12 +881,26 @@ public class BaseFileTest {
         case 3:
           provider.put(delta);
           provider.put(replacement);
+          break;
+        case 4:
+          provider.put(deltaC);
+          break;
+        case 5:
+          provider.put(delta);
+          provider.put(deltaC);
+          break;
+        case 6:
+          provider.put(delta);
+          provider.put(replacement);
+          provider.put(deltaC);
       }
 
       delta.set(0, "foo".getBytes(StandardCharsets.UTF_8));
       delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
       replacement.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
       replacement.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
+      deltaC.setNull(0);
+      deltaC.setNull(1);
 
       VectorSchemaRoot root = null;
       switch (state) {
@@ -890,6 +912,15 @@ public class BaseFileTest {
           break;
         case 3:
           root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector());
+          break;
+        case 4:
+          root = VectorSchemaRoot.of(deltaC.getIndexVector());
+          break;
+        case 5:
+          root = VectorSchemaRoot.of(delta.getIndexVector(), deltaC.getIndexVector());
+          break;
+        case 6:
+          root = VectorSchemaRoot.of(delta.getIndexVector(), replacement.getIndexVector(), deltaC.getIndexVector());
       }
       root.setRowCount(2);
       try (FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -905,6 +936,8 @@ public class BaseFileTest {
         delta.set(1, "bar".getBytes(StandardCharsets.UTF_8));
         replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
         replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        deltaC.set(0, "qui".getBytes(StandardCharsets.UTF_8));
+        deltaC.set(1, "dolor".getBytes(StandardCharsets.UTF_8));
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
@@ -912,9 +945,12 @@ public class BaseFileTest {
 
         // batch 3
         delta.setNull(0);
-        delta.set(1, "bazz".getBytes(StandardCharsets.UTF_8));
+        delta.setNull(1);
         replacement.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
         replacement.setNull(1);
+        deltaC.setNull(0);
+        deltaC.set(1, "qui".getBytes(StandardCharsets.UTF_8));
+
         root.setRowCount(2);
         arrowWriter.writeBatch();
         delta.reset();
@@ -924,12 +960,39 @@ public class BaseFileTest {
         delta.set(1, "zap".getBytes(StandardCharsets.UTF_8));
         replacement.setNull(0);
         replacement.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        deltaC.setNull(0);
+        deltaC.setNull(1);
+
         root.setRowCount(2);
         arrowWriter.writeBatch();
 
         arrowWriter.end();
       }
     }
+  }
+
+  Map<Integer, String[][]> valuesPerBlock = new HashMap<Integer, String[][]>();
+  {
+    valuesPerBlock.put(0, new String[][]{
+        {"foo", "bar"},
+        {"lorem", "ipsum"},
+        {null, null}
+    });
+    valuesPerBlock.put(1, new String[][]{
+        {"meep", "bar"},
+        {"ipsum", "lorem"},
+        {"qui", "dolor"}
+    });
+    valuesPerBlock.put(2, new String[][]{
+        {null, null},
+        {"ipsum", null},
+        {null, "qui"}
+    });
+    valuesPerBlock.put(3, new String[][]{
+        {"bar", "zap"},
+        {null, "lorem"},
+        {null, null}
+    });
   }
 
   BatchedDictionary newDictionary(String name, DictionaryEncoding encoding) {
