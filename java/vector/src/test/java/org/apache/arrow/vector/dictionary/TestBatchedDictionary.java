@@ -197,9 +197,9 @@ public class TestBatchedDictionary {
         false,
         allocator
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
-      dictionary.set(2, BAZ);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
+      dictionary.setSafe(2, BAZ);
       dictionary.mark();
       assertEquals(3, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -216,9 +216,9 @@ public class TestBatchedDictionary {
         vectors.get(1),
         false
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
-      dictionary.set(2, BAZ);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
+      dictionary.setSafe(2, BAZ);
       dictionary.mark();
       assertEquals(3, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -238,7 +238,7 @@ public class TestBatchedDictionary {
         allocator
     )) {
       dictionary.setNull(0);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(1, BAR);
       dictionary.setNull(2);
       dictionary.mark();
       assertEquals(1, dictionary.getVector().getValueCount());
@@ -257,7 +257,7 @@ public class TestBatchedDictionary {
         false
     )) {
       dictionary.setNull(0);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(1, BAR);
       dictionary.setNull(2);
       dictionary.mark();
       assertEquals(1, dictionary.getVector().getValueCount());
@@ -277,10 +277,10 @@ public class TestBatchedDictionary {
         false,
         allocator
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
-      dictionary.set(2, FOO);
-      dictionary.set(3, FOO);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
+      dictionary.setSafe(2, FOO);
+      dictionary.setSafe(3, FOO);
       dictionary.mark();
       assertEquals(2, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -299,8 +299,8 @@ public class TestBatchedDictionary {
         false,
         allocator
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
       dictionary.mark();
       assertEquals(2, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -309,7 +309,7 @@ public class TestBatchedDictionary {
 
       dictionary.reset();
       assertEquals(0, dictionary.getHashTable().size);
-      dictionary.set(0, BAZ);
+      dictionary.setSafe(0, BAZ);
       dictionary.setNull(1);
       dictionary.mark();
       assertEquals(1, dictionary.getVector().getValueCount());
@@ -329,8 +329,8 @@ public class TestBatchedDictionary {
         false,
         allocator
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
       dictionary.mark();
       assertEquals(2, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -339,9 +339,9 @@ public class TestBatchedDictionary {
 
       dictionary.reset();
       assertEquals(2, dictionary.getHashTable().size);
-      dictionary.set(0, BAZ);
-      dictionary.set(1, FOO);
-      dictionary.set(2, BAR);
+      dictionary.setSafe(0, BAZ);
+      dictionary.setSafe(1, FOO);
+      dictionary.setSafe(2, BAR);
       dictionary.mark();
       assertEquals(1, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -366,8 +366,8 @@ public class TestBatchedDictionary {
         false,
         allocator
     )) {
-      dictionary.set(0, null);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(0, null);
+      dictionary.setSafe(1, BAR);
       dictionary.mark();
       assertEquals(1, dictionary.getVector().getValueCount());
       assertEquals(0, dictionary.getIndexVector().getValueCount());
@@ -386,12 +386,12 @@ public class TestBatchedDictionary {
         true,
         allocator
     )) {
-      dictionary.set(0, FOO);
-      dictionary.set(1, BAR);
+      dictionary.setSafe(0, FOO);
+      dictionary.setSafe(1, BAR);
       dictionary.reset();
-      dictionary.set(0, BAR);
+      dictionary.setSafe(0, BAR);
       assertThrows(IllegalStateException.class, () -> {
-        dictionary.set(1, BAZ);
+        dictionary.setSafe(1, BAZ);
       });
     }
   }

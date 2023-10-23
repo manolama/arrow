@@ -871,7 +871,7 @@ public class BaseFileTest {
    * state == 3, one of each
    * state == 4, delta with nothing at start and end
    * state == 5, both deltas
-   * state == 6, all of em
+   * state == 6, both deltas and standalone
    * state == 7, replacement dictionary
    */
   protected void writeDataMultiBatchWithDictionaries(OutputStream stream, int state) throws IOException {
@@ -883,9 +883,9 @@ public class BaseFileTest {
 
     boolean isFile = stream instanceof FileOutputStream;
     try (BatchedDictionary vectorA = newDictionary("vectorA", deltaEncoding, isFile);
-         BatchedDictionary vectorB = newDictionary("vectorB",replacementEncoding, isFile);
+         BatchedDictionary vectorB = newDictionary("vectorB", replacementEncoding, isFile);
          BatchedDictionary vectorC = newDictionary("vectorC", deltaCEncoding, isFile);
-         BatchedDictionary vectorD = newDictionary("vectorD", replacementEncoding, isFile);) {
+         BatchedDictionary vectorD = newDictionary("vectorD", replacementEncodingUpdated, isFile);) {
       switch (state) {
         case 1:
           provider.put(vectorA);
@@ -946,71 +946,59 @@ public class BaseFileTest {
           arrowWriter = new ArrowStreamWriter(root, provider, stream);
         }
 
-        vectorA.set(0, "foo".getBytes(StandardCharsets.UTF_8));
-        vectorA.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-        vectorB.set(0, "lorem".getBytes(StandardCharsets.UTF_8));
-        vectorB.set(1, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(0, "foo".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(1, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(0, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(1, "ipsum".getBytes(StandardCharsets.UTF_8));
         vectorC.setNull(0);
         vectorC.setNull(1);
-        vectorD.set(0, "porro".getBytes(StandardCharsets.UTF_8));
-        vectorD.set(1, "amet".getBytes(StandardCharsets.UTF_8));
+        vectorD.setSafe(0, "porro".getBytes(StandardCharsets.UTF_8));
+        vectorD.setSafe(1, "amet".getBytes(StandardCharsets.UTF_8));
 
         // batch 1
         arrowWriter.start();
         root.setRowCount(2);
         arrowWriter.writeBatch();
-//        vectorA.reset();
-//        vectorB.reset();
-//        vectorC.reset();
-//        vectorD.reset();
 
         // batch 2
-        vectorA.set(0, "meep".getBytes(StandardCharsets.UTF_8));
-        vectorA.set(1, "bar".getBytes(StandardCharsets.UTF_8));
-        vectorB.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
-        vectorB.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
-        vectorC.set(0, "qui".getBytes(StandardCharsets.UTF_8));
-        vectorC.set(1, "dolor".getBytes(StandardCharsets.UTF_8));
-        vectorD.set(0, "amet".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(0, "meep".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(1, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorC.setSafe(0, "qui".getBytes(StandardCharsets.UTF_8));
+        vectorC.setSafe(1, "dolor".getBytes(StandardCharsets.UTF_8));
+        vectorD.setSafe(0, "amet".getBytes(StandardCharsets.UTF_8));
         if (state == 7) {
-          vectorD.set(1, "quia".getBytes(StandardCharsets.UTF_8));
+          vectorD.setSafe(1, "quia".getBytes(StandardCharsets.UTF_8));
         }
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
-//        vectorA.reset();
-//        vectorB.reset();
-//        vectorC.reset();
-//        vectorD.reset();
 
         // batch 3
         vectorA.setNull(0);
         vectorA.setNull(1);
-        vectorB.set(0, "ipsum".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(0, "ipsum".getBytes(StandardCharsets.UTF_8));
         vectorB.setNull(1);
         vectorC.setNull(0);
-        vectorC.set(1, "qui".getBytes(StandardCharsets.UTF_8));
+        vectorC.setSafe(1, "qui".getBytes(StandardCharsets.UTF_8));
         vectorD.setNull(0);
         if (state == 7) {
-          vectorD.set(1, "quia".getBytes(StandardCharsets.UTF_8));
+          vectorD.setSafe(1, "quia".getBytes(StandardCharsets.UTF_8));
         }
 
         root.setRowCount(2);
         arrowWriter.writeBatch();
-//        vectorA.reset();
-//        vectorB.reset();
-//        vectorC.reset();
-//        vectorD.reset();
 
         // batch 4
-        vectorA.set(0, "bar".getBytes(StandardCharsets.UTF_8));
-        vectorA.set(1, "zap".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(0, "bar".getBytes(StandardCharsets.UTF_8));
+        vectorA.setSafe(1, "zap".getBytes(StandardCharsets.UTF_8));
         vectorB.setNull(0);
-        vectorB.set(1, "lorem".getBytes(StandardCharsets.UTF_8));
+        vectorB.setSafe(1, "lorem".getBytes(StandardCharsets.UTF_8));
         vectorC.setNull(0);
         vectorC.setNull(1);
         if (state == 7) {
-          vectorD.set(0, "quia".getBytes(StandardCharsets.UTF_8));
+          vectorD.setSafe(0, "quia".getBytes(StandardCharsets.UTF_8));
         }
         vectorD.setNull(1);
 

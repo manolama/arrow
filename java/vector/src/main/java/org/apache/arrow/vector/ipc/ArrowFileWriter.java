@@ -137,7 +137,8 @@ public class ArrowFileWriter extends ArrowWriter {
           writeDictionaryBatch(dictionary, false);
         }
         // TODO - It would be useful to throw an exception here if a replacement dictionary was found
-        // with modifications. Replacements are not currently allowed in files. For now, we just drop it.
+        // with modifications. Replacements are not currently allowed in files. For now, we just drop it
+        // and throw an exception in the BatchedDictionary and hope users use that class.
       }
       return;
     }

@@ -31,7 +31,6 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.util.VisibleForTesting;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.NoCompressionCodec;
-import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
 import org.apache.arrow.vector.ipc.message.ArrowDictionaryBatch;
 import org.apache.arrow.vector.ipc.message.ArrowFooter;
@@ -52,7 +51,7 @@ public class ArrowFileReader extends ArrowReader {
 
   private SeekableReadChannel in;
   private ArrowFooter footer;
-  private int drb = 0; // TESTING dictionary block, i.e. if we're in sync with currentRecordbatch.
+  private int estimatedDictionaryRecordBatch = 0;
   private int currentDictionaryBatch = 0;
   private int currentRecordBatch = 0;
 
@@ -154,6 +153,11 @@ public class ArrowFileReader extends ArrowReader {
     }
   }
 
+  /**
+   * Loads any dictionaries that may be needed by the given record batch. It attempts
+   * to read as little as possible but may read in more deltas than are necessary for blocks
+   * toward the end of the file.
+   */
   private void loadDictionaries() throws IOException {
     // initial load
     if (currentDictionaryBatch == 0) {
@@ -162,18 +166,18 @@ public class ArrowFileReader extends ArrowReader {
         ArrowDictionaryBatch dictionaryBatch = readDictionaryBatch(in, block, allocator);
         loadDictionary(dictionaryBatch);
       }
-      drb++;
+      estimatedDictionaryRecordBatch++;
     } else {
-      // we need to look for delta dictionaries. It involves a look-ahead.
+      // we need to look for delta dictionaries. It involves a look-ahead unfortunately.
       HashSet<Long> visited = new HashSet<Long>();
-      while (drb < currentRecordBatch && currentDictionaryBatch < footer.getDictionaries().size()) {
+      while (estimatedDictionaryRecordBatch < currentRecordBatch && currentDictionaryBatch < footer.getDictionaries().size()) {
         ArrowBlock block = footer.getDictionaries().get(currentDictionaryBatch++);
         ArrowDictionaryBatch dictionaryBatch = readDictionaryBatch(in, block, allocator);
         long dictionaryId = dictionaryBatch.getDictionaryId();
         if (visited.contains(dictionaryId)) {
           // done
           currentDictionaryBatch--;
-          drb++;
+          estimatedDictionaryRecordBatch++;
         } else if (!dictionaries.containsKey(dictionaryId)) {
           throw new IOException("Dictionary ID " + dictionaryId + " was written " +
               "after the initial batch. The file does not follow the IPC file protocol.");
@@ -185,7 +189,7 @@ public class ArrowFileReader extends ArrowReader {
         }
       }
       if (currentDictionaryBatch >= footer.getDictionaries().size()) {
-        drb++;
+        estimatedDictionaryRecordBatch++;
       }
     }
   }
@@ -213,16 +217,7 @@ public class ArrowFileReader extends ArrowReader {
       throw new IllegalArgumentException("Arrow block does not exist in record batches: " + block);
     }
     currentRecordBatch = blockIndex;
-    int end = blockIndex * dictionaries.size();
-    System.out.println("  START " + currentDictionaryBatch + "  to  " + end);
-    // scan for delta dictionaries
     loadDictionaries();
-//    while (currentDictionaryBatch < end) {
-//      for (int i = 0; i < dictionaries.size(); i++) {
-//        ArrowDictionaryBatch dictionaryBatch = readDictionary();
-//        loadDictionary(dictionaryBatch);
-//      }
-//    }
     return loadNextBatch();
   }
 

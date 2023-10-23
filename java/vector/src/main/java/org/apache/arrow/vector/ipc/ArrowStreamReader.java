@@ -154,7 +154,6 @@ public class ArrowStreamReader extends ArrowReader {
 
       // For zero-length batches, need an empty buffer to deserialize the batch
       if (bodyBuffer == null) {
-        System.out.println("[STREAM]  WTF? Zero length batch");
         bodyBuffer = allocator.getEmpty();
       }
 

@@ -202,7 +202,7 @@ public class MurmurHasher implements ArrowBufHasher {
     return seed;
   }
 
-  static private int readInt(byte[] buffer, int offset, int len) {
+  private static int readInt(byte[] buffer, int offset, int len) {
     int result = 0;
     for (int i = offset; i < offset + len; i++) {
       result <<= 8;

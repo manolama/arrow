@@ -32,6 +32,9 @@ public interface DictionaryProvider {
   /** Get all dictionary IDs. */
   Set<Long> getDictionaryIds();
 
+  /**
+   * Reset all batched dictionaries associated with this provider.
+   */
   void resetBatchedDictionaries();
 
   /**

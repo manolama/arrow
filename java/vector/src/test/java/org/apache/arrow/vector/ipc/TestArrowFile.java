@@ -50,7 +50,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TestArrowFile extends BaseFileTest {
+public class TestArrowFile extends BaseFileTest {A
   private static final Logger LOGGER = LoggerFactory.getLogger(TestArrowFile.class);
 
   // overriding here since a number of other UTs sharing the BaseFileTest class use

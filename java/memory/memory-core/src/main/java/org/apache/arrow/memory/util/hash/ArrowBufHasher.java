@@ -45,5 +45,12 @@ public interface ArrowBufHasher {
    */
   int hashCode(ArrowBuf buf, long offset, long length);
 
+  /**
+   * Calculates the hash code for a byte array.
+   * @param buf the non-null byte array.
+   * @param offset offset within the buffer for the memory region.
+   * @param length length of the memory region.
+   * @return the hash code.
+   */
   int hashCode(byte[] buf, int offset, int length);
 }

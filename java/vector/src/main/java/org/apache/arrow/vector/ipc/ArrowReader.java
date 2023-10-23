@@ -42,6 +42,7 @@ import org.apache.arrow.vector.util.VectorBatchAppender;
 
 /**
  * Abstract class to read Schema and ArrowRecordBatches.
+ *
  */
 public abstract class ArrowReader implements DictionaryProvider, AutoCloseable {
 
@@ -239,18 +240,16 @@ public abstract class ArrowReader implements DictionaryProvider, AutoCloseable {
       throw new IllegalArgumentException("Dictionary ID " + id + " not defined in schema");
     }
     FieldVector vector = dictionary.getVector();
-    System.out.println("------ Loading dictionary " + id + ". Existing dict: " + vector);
     // if is deltaVector, concat it with non-delta vector with the same ID.
     if (dictionaryBatch.isDelta()) {
       try (FieldVector deltaVector = vector.getField().createVector(allocator)) {
         load(dictionaryBatch, deltaVector);
         VectorBatchAppender.batchAppend(vector, deltaVector);
-        System.out.println("   Concat: " + vector.getValueCount() + " => " + vector);
       }
       return;
-    } else {
-      System.out.println("   Not delta????");
     }
+    // TODO - If the super class is a file reader it may be good to throw an exception here
+    // the dictionary failed to satisfy the spec (i.e. being a replacement dictionary)
 
     load(dictionaryBatch, vector);
   }

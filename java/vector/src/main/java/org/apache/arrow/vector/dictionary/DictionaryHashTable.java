@@ -195,6 +195,13 @@ public class DictionaryHashTable {
     addEntry(hash, indexInDictionary, i);
   }
 
+  /**
+   * Returns the corresponding dictionary index entry given a hash code. If the hash has
+   * not been written to the table, returns -1.
+   *
+   * @param hash The hash to lookup.
+   * @return The dictionary index if present, -1 if not.
+   */
   public int getIndex(int hash) {
     int i = indexFor(hash, table.length);
     for (DictionaryHashTable.Entry e = table[i]; e != null; e = e.next) {
@@ -214,6 +221,12 @@ public class DictionaryHashTable {
     size++;
   }
 
+  /**
+   * Adds an entry to the hash table.
+   *
+   * @param hash The hash to add.
+   * @param index The corresponding dictionary index.
+   */
   public void addEntry(int hash, int index) {
     int bucketIndex = indexFor(hash, table.length);
     addEntry(hash, index, bucketIndex);
